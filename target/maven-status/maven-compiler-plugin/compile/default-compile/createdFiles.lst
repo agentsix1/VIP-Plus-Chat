@@ -1,0 +1,4 @@
+me\kronix\staffchat\commands\cmdChat.class
+me\kronix\staffchat\StaffChat.class
+me\kronix\staffchat\events\evnOnChat.class
+me\kronix\staffchat\commands\cmdFastFocus.class

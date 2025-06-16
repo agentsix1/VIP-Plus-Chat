@@ -1,0 +1,12 @@
+name: VIP_Plus_Chat
+version: 0.8.6
+description: Chat channels for away from the public eye.
+author: Agentsix1
+main: me.kronix.staffchat.StaffChat
+api-version: 1.16
+commands:
+  vpc:
+    description: Used for editing the config in game!
+permissions:
+  vippluschat.admin:
+    default: op
