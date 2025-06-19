@@ -11,3 +11,4 @@ One of the best and customizable vip/staff chat plugins on spigot!
 - /vpc info now displays your information such as blacklist state, focused chats, ignored players, ignored chats
 - /vpc info {player} now displays the players information such as blacklist state, focused chats, ignored players, ignored chats
 - /vpc focused will now display what channel you are currently focused on
+- Added basic follia support
