@@ -4,6 +4,7 @@ description: Chat channels for away from the public eye.
 author: Agentsix1
 main: me.kronix.staffchat.StaffChat
 api-version: 1.16
+folia-supported: true
 commands:
   vpc:
     description: Used for editing the config in game!
