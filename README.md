@@ -1,7 +1,9 @@
 # VIP+ Chat
 One of the best and customizable vip/staff chat plugins on spigot!
 
-## Change Log v0.8.6 - Changed Oct 29th 2024 (Unreleased)
+## [Download]((https://github.com/agentsix1/VIP-Plus-Chat/blob/main/target/staffchat-0.8.6.jar)
+
+### Change Log v0.8.6 - Changed Oct 29th 2024 (Unreleased)
 - Added tab complete to all custom chats
 - Added tab complete to all commands
 - Fixed checkver to use proper updated url (https)
