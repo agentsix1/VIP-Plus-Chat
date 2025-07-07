@@ -6,7 +6,7 @@ One of the best and customizable vip/staff chat plugins on spigot!
 <details>
   <summary>Archive Build (Click Here)</summary>
 
-  [Archive Build 0.8.5](https://www.spigotmc.org/resources/vip-chat-advanced.3308/) - Download v0.8.5 (Support for 1.6.4+)
+  ###[Archive Build 0.8.5](https://www.spigotmc.org/resources/vip-chat-advanced.3308/) - Download v0.8.5 (Support for 1.6.4+)
 
 </details>
 
