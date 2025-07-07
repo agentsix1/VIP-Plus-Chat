@@ -27,6 +27,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandMap;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -40,6 +41,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import me.kronix.staffchat.commands.cmdChat;
 import me.kronix.staffchat.commands.cmdFastFocus;
 import me.kronix.staffchat.events.evnOnChat;
+
 
 /*
 	Change Log v0.8.6 - Changed Oct 29th 2024
@@ -288,22 +290,25 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    
 	}
 	
-	//---- Catches messages on the outbound for focus mode - v0.8.5
+	//---- Catches messages on the outbound for focus mode - v0.8.5 -- Updated v0.8.7
 	@EventHandler
 	public void onPlayerMessage(AsyncPlayerChatEvent e) {
 		if (inFocus(e.getPlayer())) {
 			e.setCancelled(true);
-			int chatID = detectChatID(focus.get(e.getPlayer()));
+			
+			ConfigurationSection chat = detectChat(focus.get(e.getPlayer()));
+			if ( chat == null ) { return; }
+			
 			String msg = e.getMessage();
-			if (serverAntiSwear(chatID)) {
-				 msg = antiswearServerCheck(msg, chatID);
+			if (chat.getBoolean( "anti-swear.server.enabled" )) {
+				 msg = antiswearServerCheck(msg, chat);
 					if (msg.equalsIgnoreCase("ERROR: 1337 - Banned Message")) {
-						pMessage(getConfig().getString("Messages.antiswear-banned").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), e.getPlayer());
+						pMessage(getConfig().getString("Messages.antiswear-banned").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), e.getPlayer());
 					} else {
-						sendMessages(msg, e.getPlayer(), "vippluschat.chat." + getCustomChats().getString(chatID + ".permission"), chatID + ".layout", chatID);	
+						sendMessages(msg, e.getPlayer(), "vippluschat.chat." + chat.getString("permission"), ".layout", chat);	
 					}
 			} else {
-				sendMessages(msg, e.getPlayer(), "vippluschat.chat." + getCustomChats().getString(chatID + ".permission"), chatID + ".layout", chatID);
+				sendMessages(msg, e.getPlayer(), "vippluschat.chat." + chat.getString("permission"), ".layout", chat);
 			}
 			
 		}
@@ -366,13 +371,11 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 
 	//---- Load all the custom chat commands so they are properly registered -- Added v0.8.6 - Oct 28th 2024
 	private void loadChatCommands() {
-		int i = 0;
-		do {
-			
-	 		for ( String cmd : getCustomChats().getStringList(i + ".command")) {
+		for ( String key : getCustomChats().getKeys(false)) {
+			for ( String cmd : getCustomChats().getStringList(key + ".command")) {
 				registerChatCommand( cmd );
 			}
-		} while (i++ < getCustomChats().getInt("Chat Count") - 1); 
+		}
 	}
 
 	private void registerChatCommand(String commandName) {
@@ -395,14 +398,14 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- Load all the custom fast focus commands. -- Added v0.8.6 - Oct 28th 2024
 
 	private void loadChatFocusCommands() {
-		int i = 0;
-		do {
-	 		String fc = getCustomChats().getString(i + ".fastfocus-command");
-			registerFocusChatCommand( fc, i );
-		} while (i++ < getCustomChats().getInt("Chat Count") - 1);
+		for (String key : getCustomChats().getKeys(false)) {
+			ConfigurationSection chat = getCustomChats().getConfigurationSection(key);
+			String fc = chat.getString("fastfocus-command");
+			registerFocusChatCommand( fc, chat );
+		}
 	}
 
-	private void registerFocusChatCommand(String commandName, int chatid) {
+	private void registerFocusChatCommand(String commandName, ConfigurationSection chat) {
         try {
             Field commandMapField = Bukkit.getServer().getClass().getDeclaredField("commandMap");
             commandMapField.setAccessible(true);
@@ -410,7 +413,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
             commandMap = (CommandMap) commandMapField.get(Bukkit.getServer());
 
             // Create a new instance of the dynamic command with shared tab completions
-            cmdFastFocus command = new cmdFastFocus(commandName, chatid, this);
+            cmdFastFocus command = new cmdFastFocus(commandName, chat, this);
 
             // Register the command
             commandMap.register("myplugin", command);
@@ -435,24 +438,24 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 
 	public List<String> getAllChatList() {
 		List<String> chats = new ArrayList<String>();
-		int i = 0;
-		do {
-			chats.add( getCustomChats().getString(i + ".name") );
-		} while (i++ < getCustomChats().getInt("Chat Count") - 1);
+		for ( String key : getCustomChats().getKeys(false) ) {
+			chats.add( getCustomChats().getString(key + ".name") );
+		}
 		return chats;
 	}
 
 	public List<String> getChatList( Player p ) {
 		List<String> chats = new ArrayList<String>();
-		int i = 0;
-		do {
-			if (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + getCustomChats().getString(i + ".permission"))) {
-				chats.add( getCustomChats().getString(i + ".name") );
+		for ( String key : getCustomChats().getKeys(false) ) {
+			if (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + getCustomChats().getString(key + ".permission"))) {
+				chats.add( getCustomChats().getString(key + ".name") );
 			}
-		} while (i++ < getCustomChats().getInt("Chat Count") - 1);
+		}
 		return chats;
 	}
 	//---- Detect Chat ID - This was added to detect what what chat you are trying to reach - Added v0.8.2
+	//---- Removed during v0.8.7 to use chat name instead
+	/*
 	public int detectChatID(String j) {
 		int i = 0;
 		do {
@@ -467,18 +470,42 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		} while (i++ < getCustomChats().getInt("Chat Count") - 1);
 		return -1;
 	}
+	*/
 	//---- End Detect Chat ID
 	
-	public String pstatusGetChats(Player p, int chat) {
+	//----- Detect Chat Name - This was added to detect what chat you are trying to reach - Added v0.8.7
+	public ConfigurationSection detectChat( String j ) {
+		for (String key : getCustomChats().getKeys( false )) {
+			ConfigurationSection chat = getCustomChats().getConfigurationSection( key );
+			if ( chat.getString( "name" ).equalsIgnoreCase(j)) return chat;
+			for ( String cmd : chat.getStringList( "command" ) ) {
+				if (cmd.equalsIgnoreCase( j ) ) return chat;
+			}
+
+		}
+		return null;
+	}
+	//---- End Detect Chat Name
+
+
+
+	public String pstatusGetChats(Player p, ConfigurationSection chat) {
+		
+		
+		//---- Creates a list of Chat ID's -- Removed 7/7/2025 v0.8.7
+		/*
 		int i = 0;
 		String out = "";
 		List<Integer> permissions = new ArrayList<Integer>(); 
 		do {
-			if (p.hasPermission("vippluschat.chat.ignore") && (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + getCustomChats().getString(i + ".permission")))) {
+			if (p.hasPermission("vippluschat.chat.ignore") && (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + chat.getString(i + ".permission")))) {
 				permissions.add(i);
 			}
 			i++; 
 		} while (i < getCustomChats().getInt("Chat Count"));
+		*/
+		//---- Cycles through all the chats and determines the status using the ID -- Removed 7/7/2025 v0.8.7
+		/*
 		if (permissions.size() > 0) {
 			for (int c : permissions) {
 				if (chat != -1) {
@@ -507,6 +534,46 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 						
 					}
 				} else {
+					
+				}
+			}
+		}
+		*/
+		
+		//---- Creates a list of Chat Configuration Section's -- Added 7/7/2025 v0.8.7
+		String out = "";
+
+		List<ConfigurationSection> permissions = new ArrayList<ConfigurationSection>(); 
+		for ( String key : getCustomChats().getKeys( false ) ) {
+			if (p.hasPermission("vippluschat.chat.ignore") && (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + getCustomChats().getConfigurationSection( key ).getString("permission")))) {
+				permissions.add(getCustomChats().getConfigurationSection( key ));
+			}
+		}
+		//---- Creates a list of Chat ID's -- Added 7/7/2025 v0.8.7
+		if (permissions.size() > 0) {
+			for (ConfigurationSection c : permissions) {
+				String stats = "&cfalse";
+				if (inIgnorelist(p.getUniqueId().toString(), p.getName(), c)) { stats = "&atrue"; } 
+				if (chat == null) {
+					
+					if (out.equalsIgnoreCase("")) {
+						out = getConfig().getString("Messages.pstatus-ignored-items").replace("%CHAT_TAG%", c.getString("layout-tag")).replace("%CHAT_NAME%", c.getString("name")).replace("%STATUS%", stats).replace("%NL%", "\n");
+					} else {
+						out = out + getConfig().getString("Messages.pstatus-ignored-items").replace("%CHAT_TAG%", c.getString("layout-tag")).replace("%CHAT_NAME%", c.getString("name")).replace("%STATUS%", stats).replace("%NL%", "\n");
+					}
+				} else {
+					if (p.hasPermission("vippluschat.chat.ignore") && (p.hasPermission("vippluschat.chat.*") || p.hasPermission("vippluschat.chat." + chat.getString("permission")))) {
+						stats = "&cfalse";
+						if (inIgnorelist(p.getUniqueId().toString(), p.getName(), chat)) { stats = "&atrue"; } 
+						if (out.equalsIgnoreCase("")) {
+							out = getConfig().getString("Messages.pstatus-ignored-items").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATUS%", stats).replace("%NL%", "\n");
+						} else {
+							out = out + getConfig().getString("Messages.pstatus-ignored-items").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATUS%", stats);
+						}
+					} else {
+						pMessage(getConfig().getString("Messages.no-permissions"), p);
+						return "no";
+					}
 					
 				}
 			}
@@ -666,7 +733,11 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	public boolean onCommand(CommandSender sender, Command cmd, String cmdLabel, String[] args) {
     	if(sender instanceof Player) {
     		Player p = (Player) sender;
-
+			//---- No Arguments found v0.8.7 7/7/2025 - /vpc
+			if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 0) {
+				pMessage(getConfig().getString( "Messages.no-args").replace( "%VERSION%", version ), p);
+				return false;
+			}
 			//---- Focused info v0.8.6 10/29/2024 - /vpc focused --- v0.8.6
 			if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 1 && args[0].equalsIgnoreCase( "focused" )) {
 				if (focus.containsKey(p)) {
@@ -724,12 +795,12 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		//---- View Swear Dictionary v0.8.5 3/1/2017 - /vpc swear list {chat}| Optional: {#} - Shows the list of words in the chat specified's dictionary. --- v0.8.5
     		if (cmdLabel.equalsIgnoreCase("vpc") && (args.length == 3 || args.length == 4)) {
     			if (args[0].equalsIgnoreCase("swear") && args[1].equalsIgnoreCase("list")) {
-    				int chatID = detectChatID(args[2]);
-    				if (chatID != -1) {
+    				ConfigurationSection chat = detectChat(args[2]);
+    				if (chat != null) {
     					if (args.length == 3) {
-    						pMessage(showSwearListServer(1, chatID), p);
+    						pMessage(showSwearListServer(1, chat), p);
     					} else if (args.length == 4 & StringUtils.isNumericSpace(args[3])) {
-    						pMessage(showSwearListServer(Integer.parseInt(args[3]), chatID), p);
+    						pMessage(showSwearListServer(Integer.parseInt(args[3]), chat), p);
     					}
     					
     				}
@@ -741,24 +812,26 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && (args.length == 3)) {
     			if (args[0].equalsIgnoreCase("swear") && args[1].equalsIgnoreCase("toggle")) {
     				if (p.hasPermission("vippluschat.admin.swear-toggle-server") || p.hasPermission("vippluschat.admin")) {
-	    				int chatID = detectChatID(args[2]);
-	    				if (chatID != -1) {
+	    				ConfigurationSection chat = detectChat(args[2]);
+	    				if (chat != null) {
 	    					String state = "";
-	    					if (getCustomChats().getBoolean(chatID + ".anti-swear.server.enabled")) {
-	    						getCustomChats().set(chatID + ".anti-swear.server.enabled", false);
+	    					if (chat.getBoolean("anti-swear.server.enabled")) {
+	    						chat.set("anti-swear.server.enabled", false);
 	    						saveCustomConfig();
 	    						reloadChats();
 	    						state = "&cDisabled";
-	    						pMessage(getConfig().getString("Messages.antiswear-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%STATUS%", state).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	    						pMessage(getConfig().getString("Messages.antiswear-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName())
+								.replace("%STATUS%", state).replace("%CHAT_TAG%", chat.getString("layout-tag"))
+								.replace("%CHAT_NAME%", chat.getString("name")), p);
 	    					} else { 
-	    						getCustomChats().set(chatID + ".anti-swear.server.enabled", true);
+	    						chat.set("anti-swear.server.enabled", true);
 	    						saveCustomConfig();
 	    						reloadChats();
 	    						state = "&aEnabled";
-	    						getOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name"))).options().copyDefaults(true);
-	    						saveOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")));
-	    						tcOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), "d");
-	    						pMessage(getConfig().getString("Messages.antiswear-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%STATUS%", state).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	    						getOther(chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name"))).options().copyDefaults(true);
+	    						saveOther(chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name")));
+	    						tcOther(chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name")), "d");
+	    						pMessage(getConfig().getString("Messages.antiswear-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%STATUS%", state).replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	    					}
 	    					
 	    				} else {
@@ -766,6 +839,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    				}
     				} else {
     					pMessage(getConfig().getString("Messages.no-permissions"), p);
+						return false;
     				}
     			}
     		}
@@ -776,15 +850,15 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && (args.length == 4 || args.length == 5) ||args.length == 3 ) {
     			if (args[0].equalsIgnoreCase("swear")) {
     				if (p.hasPermission("vippluschat.admin.swear-modify") || p.hasPermission("vippluschat.admin")) {
-	    				int chatID = detectChatID(args[2]);
+	    				ConfigurationSection chat = detectChat(args[2]);
 	    				String loc = "";
-	    				if (chatID != -1) {
-	    					loc = getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name"));
+	    				if (chat != null) {
+	    					loc = chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name"));
 	    				}
 	    				switch (args[1]) {
 	    				case "+":
 	    				case "add":
-	        				if (chatID != -1) {
+	        				if (chat != null) {
 	        					/*
 	        					 * Dictionary:
 	        					 * - shit: - Replaces the word with nothing
@@ -797,19 +871,23 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	        						List<String> l = getOther(loc).getStringList("Dictionary");
 	        						if (args.length == 4) {
 	        							if (l.remove(args[3] + ":")) {
-	        								pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	        								pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3])
+											.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        							} else {
 	        								l.add(args[3] + ":");
 		        							ssOther(loc, "Dictionary", l);
-		        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3])
+											.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        							}
 	        						} else if (args.length == 5){
 	        							if (l.remove(args[3] + ":" + args[4])) {
-	        								pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3] + ":" + args[4]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	        								pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3] + ":" + args[4])
+											.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        							} else {
 	        								l.add(args[3] + ":" + args[4]);
 		        							ssOther(loc, "Dictionary", l);
-		        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3] + ":" + args[4]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3] + ":" + args[4])
+											.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        							}
 	        						}
 	        						
@@ -818,11 +896,13 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	        						if (args.length == 4) {
 	        							l.add(args[3] + ":");
 	        							ssOther(loc, "Dictionary", l);
-	        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3])
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        						} else if (args.length == 5){
 	        							l.add(args[3] + ":" + args[4]);
 	        							ssOther(loc, "Dictionary", l);
-	        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3] + ":" + args[4]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	        							pMessage(getConfig().getString("Messages.antiswear-word-add").replace("%WORD%", args[3] + ":" + args[4])
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        						}
 	        					}
 	        					
@@ -836,7 +916,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    				case "rem":
 	    				case "del":
 	    				case "delete":
-	    					if (chatID != -1) {
+	    					if (chat != null) {
 	    						if (args.length == 4) {
 		    						if (getOther(loc).getStringList("Dictionary").size() > 0) {
 		    							List<String> l = getOther(loc).getStringList("Dictionary");
@@ -847,14 +927,17 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			    								if (w.split(":")[0].equalsIgnoreCase(args[3])) {
 			    									l.remove(w);
 			    									ssOther(loc, "Dictionary", l);
-			    									pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&aRemoved").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+			    									pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&aRemoved")
+													.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 			    									return true;
 			    								}
 			    							}
 		    							}
-		    							pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		    							pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed")
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 		        					} else {
-		        						pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		        						pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed")
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 		        					}
 	    						} else if (args.length == 5) {
 	    							if (getOther(loc).getStringList("Dictionary").size() > 0) {
@@ -866,14 +949,17 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			    								if (w.equalsIgnoreCase(args[3] + ":" + args[4])) {
 			    									l.remove(w);
 			    									ssOther(loc, "Dictionary", l);
-			    									pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&aRemoved").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+			    									pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&aRemoved")
+													.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 			    									return true;
 			    								}
 			    							}
 		    							}
-		    							pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		    							pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed")
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 		        					} else {
-		        						pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+		        						pMessage(getConfig().getString("Messages.antiswear-word-remove").replace("%WORD%", args[3]).replace("%STATE%", "&cNot Removed")
+										.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 		        					}
 	    						}
 	    					} else {
@@ -884,11 +970,13 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    				case "clear":
 	    					if (args.length > 2) {
 	    						if (args[1].equalsIgnoreCase("clear")) {
-	    							if (chatID != -1) {
+	    							if (chat != null) {
 	    								ssOther(loc, "Dictionary", new ArrayList<>());
-	    								pMessage(getConfig().getString("Messages.antiswear-word-clear").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")), p);
+	    								pMessage(getConfig().getString("Messages.antiswear-word-clear").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+										.replace("%CHAT_NAME%", chat.getString("name")), p);
 	    							} else {
-	    								pMessage(getConfig().getString("Messages.antiswear-chat-syntax").replace("%COMMAND%", "/vpc swear {add,+,-,del,delte,rem,remove,clear} {chat} {word} | Optional: {replacement word}"), p);
+	    								pMessage(getConfig().getString("Messages.antiswear-chat-syntax")
+										.replace("%COMMAND%", "/vpc swear {add,+,-,del,delte,rem,remove,clear} {chat} {word} | Optional: {replacement word}"), p);
 	    							}
 	    						} else {
 	    							pMessage(getConfig().getString("Messages.antiswear-syntax").replace("%COMMAND%", "/vpc swear clear {chat}"), p);
@@ -934,10 +1022,15 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     					if (args.length == 2) {
 	    					if (args[1].equalsIgnoreCase("clear")) {
 	    						modifyPlayerIgnore(getServer().getOfflinePlayer(args[1]), p, "clear");
-	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  "All Entries").replace("%IGNORE_UUID%", "").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%STATUS%", "&cunignored"), p);
+	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  "All Entries").replace("%IGNORE_UUID%", "")
+								.replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+								.replace("%STATUS%", "&cunignored"), p);
 	    					} else {
 	    						modifyPlayerIgnore(getServer().getOfflinePlayer(args[1]), p, "toggle");
-	    						pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName()).replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
+	    						pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName())
+								.replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName())
+								.replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+								.replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
 	    					}
     					}
     					
@@ -946,7 +1039,10 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     						case "+":
     						case "add":
     							modifyPlayerIgnore(getServer().getOfflinePlayer(args[1]), p, "+");
-	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName()).replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
+	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName())
+								.replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName())
+								.replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+								.replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
     							break;
     							
     						case "-":
@@ -955,12 +1051,17 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     						case "del":
     						case "delete":
     							modifyPlayerIgnore(getServer().getOfflinePlayer(args[1]), p, "-");
-	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName()).replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
+	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  getServer().getOfflinePlayer(args[1]).getName())
+								.replace("%IGNORE_UUID%", getServer().getOfflinePlayer(args[1]).getUniqueId().toString()).replace("%PLAYER%", p.getName())
+								.replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+								.replace("%STATUS%", getPlayerIgnoreStatus(getServer().getOfflinePlayer(args[1]), p)), p);
     							break;
     						
     						case "clear":
     							modifyPlayerIgnore(getServer().getOfflinePlayer(args[1]), p, "clear");
-	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  "All Entries").replace("%IGNORE_UUID%", "").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%STATUS%", "&cunignored"), p);
+	        					pMessage(getConfig().getString("Messages.player-ignore").replace("%IGNORE_PLAYER%",  "All Entries").replace("%IGNORE_UUID%", "")
+								.replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+								.replace("%STATUS%", "&cunignored"), p);
 	        					break;
 	        				default:
 	        					pMessage(getConfig().getString("Messages.player-ignore-syntax"), p);
@@ -983,32 +1084,48 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     			if (args[0].equalsIgnoreCase("pstatus")) {
     				if (args.length == 1) {
     					if (p.hasPermission("vippluschat.user.pstatus") || (p.hasPermission("vippluschat.user.pstatus.ignored") && p.hasPermission("vippluschat.user.pstatus.blacklisted"))) {
-        					pMessage(getConfig().getString("Messages.pstatus-layout").replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, -2)), p);
+        					pMessage(getConfig().getString("Messages.pstatus-layout").replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName())
+							.replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "")
+							.replace("%IGNORED_END%", "").replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "")
+							.replace("%IGNORED_ITEMS%", pstatusGetChats(p, null)), p);
         							//.replaceAll("(%IGNORED_START%)[^&]*(%IGNORED_END%)", "$1$2")
         				} else if (p.hasPermission("vippluschat.user.pstatus.ignored")) {
-        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "").replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, -2)), p);
+        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "")
+							.replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n")
+							.replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, null)), p);
 							//.replaceAll("(%BLACKLISTED_START%)[^&]*(%BLACKLISTED_END%)", "$1$2")
         				} else if (p.hasPermission("vippluschat.user.pstatus.blacklisted")) {
-        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%IGNORED_START%).*(%IGNORED_END%)", "").replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, -2)), p);
+        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%IGNORED_START%).*(%IGNORED_END%)", "")
+							.replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+							.replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "")
+							.replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, null)), p);
         				} else {
         					pMessage(getConfig().getString("Messages.no-permissions"), p);
         				}
     				} else if (args.length == 2 && (args[1].equalsIgnoreCase("ignored") || args[1].equalsIgnoreCase("blacklisted"))) {
     					if (p.hasPermission("vippluschat.user.pstatus.blacklisted") && args[1].equalsIgnoreCase("blacklisted")) {
-    						pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%IGNORED_START%).*(%IGNORED_END%)", "").replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, -2)), p);
+    						pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%IGNORED_START%).*(%IGNORED_END%)", "")
+							.replace("%STATUS_BLACKLISTED%", pstatusGetBlacklist(p)).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+							.replace("%BLACKLISTED_START%", "").replace("%BLACKLISTED_END%", "").replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "")
+							.replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, null)), p);
         				} else if (p.hasPermission("vippluschat.user.pstatus.ignored") && args[1].equalsIgnoreCase("ignored")) {
-        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "").replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, -2)), p);
+        					pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "")
+							.replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n")
+							.replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", pstatusGetChats(p, null)), p);
         				} else {
         					pMessage(getConfig().getString("Messages.no-permissions"), p);
         				}
     				} else if (args.length == 3) {
-    					int chatID = detectChatID(args[2]);
+    					ConfigurationSection chat = detectChat(args[2]);
     					if (args[1].equalsIgnoreCase("ignored")) {
-    						if (chatID != -1) {
+    						if (chat != null) {
     							if (p.hasPermission("vippluschat.user.pstatus.ignored")) {
-    								String output = pstatusGetChats(p, chatID);
+    								String output = pstatusGetChats(p, chat);
     								if (!output.equalsIgnoreCase("no")) {
-    									pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "").replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "").replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "").replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", output), p);
+    									pMessage(getConfig().getString("Messages.pstatus-layout").replaceAll("(%BOTH_START%).*(%BOTH_END%)", "")
+										.replaceAll("(%BLACKLISTED_START%).*(%BLACKLISTED_END%)", "").replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString())
+										.replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n").replace("%IGNORED_START%", "").replace("%IGNORED_END%", "").replace("%BOTH_START%", "")
+										.replace("%BOTH_END%", "").replace("%IGNORED_ITEMS%", output), p);
     								}
     								return true;
     		    				} else {
@@ -1034,9 +1151,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 2) {
    				if (args[0].equalsIgnoreCase("colors")) {
    					if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.viewcolors")) {
-	       				int  chatID = detectChatID(args[1]);
-	       				if (chatID > -1) {
-	           				pMessage(outputColorCodes(chatID), p);
+	       				ConfigurationSection chat = detectChat(args[1]);
+	       				if (chat != null) {
+	           				pMessage(outputColorCodes(chat), p);
 	           			}
    					} else {
    	    				p.sendMessage(ct(getConfig().getString("Messages.no-permissions")));
@@ -1049,9 +1166,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 4) {
     			if (args[0].equalsIgnoreCase("colors") && args[1].equalsIgnoreCase("toggle")) {
     				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.togglecolors")) {
-    					int  chatID = detectChatID(args[2]);
-        				if (chatID > -1) {
-            				if (toggleColor(args[3], chatID)) {
+    					ConfigurationSection chat = detectChat(args[2]);
+        				if (chat != null) {
+            				if (toggleColor(args[3], chat)) {
             					pMessage("Chat color has been toggled", p);
             				} else {
             					pMessage("Chat color has failed to toggle", p);
@@ -1069,13 +1186,17 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		//---- Focus Mode - /vpc focus {} - Added v0.8.5 - 2/14/17 3:09pm 
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 2) {
     			if (args[0].equalsIgnoreCase("focus")) {
-    				int chatID = detectChatID(args[1]);
-    				if (chatID > -1) {
-    					if (p.hasPermission("vippluschat.chat.focus." + getCustomChats().getString(chatID + ".permission")) || p.hasPermission("vippluschat.chat.focus.*")) {
-    						if (toggleFocusMode(p, getCustomChats().getString(chatID + ".name"))) {
-    							pMessage(ct(getConfig().getString("Messages.focus-mode-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%STATE%", "&aEnabled&r").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "")), p);
+    				ConfigurationSection chat = detectChat(args[1]);
+    				if (chat != null) {
+    					if (p.hasPermission("vippluschat.chat.focus." + chat.getString("permission")) || p.hasPermission("vippluschat.chat.focus.*")) {
+    						if (toggleFocusMode(p, chat.getString("name"))) {
+    							pMessage(ct(getConfig().getString("Messages.focus-mode-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName())
+								.replace("%STATE%", "&aEnabled&r").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+								.replace("%CHAT_NAME%", chat.getString("name"))), p);
     						} else {
-    							pMessage(ct(getConfig().getString("Messages.focus-mode-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%STATE%", "&cDisabled&r").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "")), p);
+    							pMessage(ct(getConfig().getString("Messages.focus-mode-toggle").replace("%PLAYER%", p.getName()).replace("%DISPLAY_NAME%", p.getDisplayName())
+								.replace("%STATE%", "&cDisabled&r").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+								.replace("%CHAT_NAME%", chat.getString("name"))), p);
     						}
     					} else {
     						
@@ -1090,10 +1211,6 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		//---- Toggle ignore chats - Added v0.8.2
     		
     		//---- End Toggle ignore chats
-    		
-    		//---- Focus Mode
-    		
-    		//---- End Focus Mode
     		
     		//---- Check Version - Added 7/02/16 v0.8 - /vpc checkver
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 1) {
@@ -1173,23 +1290,29 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 2) {
     			if (args[0].equalsIgnoreCase("ignore") || args[0].equalsIgnoreCase("unignore") ) {
     				if (p.hasPermission("vippluschat.chat.ignore")) {
-	    				if (detectChatID(args[1]) > -1) {
-	    					int  chatID = detectChatID(args[1]);
+						ConfigurationSection chat = detectChat(args[1]);
+	    				if (chat != null) {
 	    					if (checkIgnoreChatSpecified(p.getName(), args[1])) {
-		    					if (getCustomChats().getBoolean(chatID + ".allow-ignore")) {
+		    					if (chat.getBoolean("allow-ignore")) {
 			    					if (args[0].equalsIgnoreCase("ignore")) {
-			    						if (!inIgnorelist(p.getUniqueId().toString(), p.getName(), chatID)) {
-			    							modifyIgnorelist(p.getUniqueId().toString(), p.getName(), chatID, "+");
-			    							pMessage(ct(getConfig().getString("Messages.ignore").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATUS%", "ignored").replace("%PLAYER%", p.getName())), p);
+			    						if (!inIgnorelist(p.getUniqueId().toString(), p.getName(), chat)) {
+			    							modifyIgnorelist(p.getUniqueId().toString(), p.getName(), chat, "+");
+			    							pMessage(ct(getConfig().getString("Messages.ignore").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+											.replace("%CHAT_NAME%", chat.getString("name"))
+											.replace("%STATUS%", "ignored").replace("%PLAYER%", p.getName())), p);
 			    						} else {
-			    							pMessage(ct(getConfig().getString("Messages.ignore-already").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATUS%", "ignored").replace("%PLAYER%", p.getName())), p);
+			    							pMessage(ct(getConfig().getString("Messages.ignore-already").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+											.replace("%CHAT_NAME%", chat.getString("name")).replace("%STATUS%", "ignored")
+											.replace("%PLAYER%", p.getName())), p);
 			    						}
 			    					} else if (args[0].equalsIgnoreCase("unignore")) {
-										if (inIgnorelist(p.getUniqueId().toString(), p.getName(), chatID)) {
-			    							modifyIgnorelist(p.getUniqueId().toString(), p.getName(), chatID, "-");
-			    							pMessage(ct(getConfig().getString("Messages.ignore").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
+										if (inIgnorelist(p.getUniqueId().toString(), p.getName(), chat)) {
+			    							modifyIgnorelist(p.getUniqueId().toString(), p.getName(), chat, "-");
+			    							pMessage(ct(getConfig().getString("Messages.ignore").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+											.replace("%CHAT_NAME%", chat.getString("name"))
+											.replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
 			    						} else {
-			    							pMessage(ct(getConfig().getString("Messages.ignore-already").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
+			    							pMessage(ct(getConfig().getString("Messages.ignore-already").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
 			    						}
 									}
 		    				/* ---- Removed v0.8.5 when ignore and blacklist system got a complete overhaul - 2/15/2017
@@ -1259,13 +1382,14 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    				}
 							*/
 								} else {
-									pMessage(getConfig().getString("Messages.ignore-disabled").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + ""),p);
+									pMessage(getConfig().getString("Messages.ignore-disabled").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+									.replace("%CHAT_NAME%", chat.getString("name")),p);
 								}
 	        				} else {
 	        					pMessage("You are blacklisted from ignoring this chat.", p);	
 	        				}
 	    				} else {
-	    					pMessage(ct(getConfig().getString("Messages.ignore-fail").replace("%CHAT_TAG%", getCustomChats().getString(detectChatID(args[1]) + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(detectChatID(args[1]) + ".name")).replace("%CHAT_ID%", detectChatID(args[1]) + "").replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
+	    					pMessage(ct(getConfig().getString("Messages.ignore-fail").replace("%CHAT_NAME%", args[1]).replace("%STATUS%", "unignored").replace("%PLAYER%", p.getName())), p);
 	        			}
     				} else { 
     					p.sendMessage(ct(getConfig().getString("Messages.no-permissions")));
@@ -1278,24 +1402,24 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") &&  (args.length == 2|| args.length == 3)) {
     			if (args[0].equalsIgnoreCase("ignored")) {
     				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.ignored")) {
-	    				if (detectChatID(args[1]) > -1) {
-	    					int chatID = detectChatID(args[1]);
+						ConfigurationSection chat = detectChat(args[1]);
+	    				if (chat != null) {
 	    					int page = 1;
 	        				try {
 	        				    page = Integer.parseInt(args[2]);
-	        				    pMessage(showIgnored(p, page, chatID), p);
+	        				    pMessage(showIgnored(p, page, chat), p);
 	        				} catch (NumberFormatException e) {
 	        				    if (args[2].equalsIgnoreCase("all")) {
-	        				    	pMessage(showIgnored(p, -1, chatID), p);
+	        				    	pMessage(showIgnored(p, -1, chat), p);
 	        				    	return true;
 	        				    } else if (args[2].equalsIgnoreCase("show")) {
-	        				    	pMessage(showIgnored(p, 1, chatID), p);
+	        				    	pMessage(showIgnored(p, 1, chat), p);
 	        				    } else {
 	        				    	return false;
 	        				    }
 	        				
 	        				} catch (ArrayIndexOutOfBoundsException d) {
-	        					pMessage(showIgnored(p, 1, chatID), p);
+	        					pMessage(showIgnored(p, 1, chat), p);
 	        				}
 	        			} else {
 	        				pMessage(getConfig().getString("Messages.ignore-fail"), p);
@@ -1309,20 +1433,20 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		
     		//---- Toggle Chat - Added PRE v0.8 - /vpc toggle {chat} : {true/false}
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 2 || args.length == 3) {
-    			if(args[0].equalsIgnoreCase("toggle") && detectChatID(args[1]) > -1) {
-    				int chatID = detectChatID(args[1]);
+				ConfigurationSection chat = detectChat(args[1]);
+    			if(args[0].equalsIgnoreCase("toggle") && chat != null) {
         			if (args.length == 2) {
-        				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.toggle") || p.hasPermission("vippluschat.toggle." + getCustomChats().getString(chatID + ".permission"))) {
-        				  if (getCustomChats().getBoolean(chatID + ".enabled")) {
-        					  getCustomChats().set(chatID + ".enabled", false);
+        				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.toggle") || p.hasPermission("vippluschat.toggle." + chat.getString("permission"))) {
+        				  if (chat.getBoolean("enabled")) {
+        					  chat.set("enabled", false);
            					  saveCustomConfig();
            					  reloadChats();
-           					pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATE%", "false"), p);
+           					pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATE%", "false"), p);
         				  } else {
-        					  getCustomChats().set(chatID + ".enabled", true);
+        					  chat.set("enabled", true);
            					  saveCustomConfig();
            					  reloadChats();
-           					pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATE%", "true"), p);
+           					pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATE%", "true"), p);
         				  }
         				  return true;
         				} else {
@@ -1331,13 +1455,13 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
         				}
         			} else if (args.length == 3 ) {
         				try{
-            				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.toggle") || p.hasPermission("vippluschat.toggle." + getCustomChats().getString(chatID + ".permission"))) {  
+            				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.toggle") || p.hasPermission("vippluschat.toggle." + chat.getString("permission"))) {  
                 					  boolean st = Boolean.valueOf(args[2]);
-                					  getCustomChats().set(chatID + ".enabled", st);
+                					  chat.set("enabled", st);
                 					  saveCustomConfig();
                 					  reloadChats();
                 					  
-                					  pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%STATE%", args[2]), p);
+                					  pMessage(getConfig().getString("Messages.toggle").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%STATE%", args[2]), p);
                 			
             				} else {
             					p.sendMessage(ct(getConfig().getString("Messages.no-permissions")));
@@ -1423,7 +1547,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		            			}
 	    					}
 	   					}
-	    				if (args[1].equalsIgnoreCase("clear") & args[2].equalsIgnoreCase("all")) {
+	    				if (args[1].equalsIgnoreCase("clear") && args[2].equalsIgnoreCase("all")) {
 		    					modifyBlacklist(null, null, "c");
 		    					/* ---- Removed v0.8.5 when there was a complete overhaul to the blacklist and ignorelist system - 2/15/2017
 		    					 * getConfig().set("Other.blacklist", ""); 
@@ -1448,13 +1572,14 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     		if (cmdLabel.equalsIgnoreCase("vpc") && args.length == 3) {
     			if (args[0].equalsIgnoreCase("fui") || (args[0].equalsIgnoreCase("forceunignore"))) {
     				if (p.hasPermission("vippluschat.admin") || p.hasPermission("vippluschat.admin.forceunignore")) {
-	    				if (detectChatID(args[1]) > -1) {
-	    					int chatID = detectChatID(args[1]);
-	    							if (inIgnorelist(getServer().getOfflinePlayer(args[2]).getUniqueId().toString(), args[2], chatID)) {
-	    								modifyIgnorelist(getServer().getOfflinePlayer(args[2]).getUniqueId().toString(), args[2], chatID, "-");
-	    							}
-	    						    //forceUnIgnore(args[2], chatID); -- Removed v0.8.5 when the ignore system and blacklist system got a huge overhaul    						
-	        					pMessage(getConfig().getString("Messages.force-unignore").replace("%PLAYER%", args[2]).replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + ""), p);
+						ConfigurationSection chat = detectChat(args[1]);
+	    				if (chat != null) {
+							if (inIgnorelist(getServer().getOfflinePlayer(args[2]).getUniqueId().toString(), args[2], chat)) {
+								modifyIgnorelist(getServer().getOfflinePlayer(args[2]).getUniqueId().toString(), args[2], chat, "-");
+							}
+							//forceUnIgnore(args[2], chatID); -- Removed v0.8.5 when the ignore system and blacklist system got a huge overhaul    						
+							pMessage(getConfig().getString("Messages.force-unignore").replace("%PLAYER%", args[2]).replace("%CHAT_TAG%", chat.getString("layout-tag"))
+							.replace("%CHAT_NAME%", chat.getString("name")), p);
 						}
     				} else {
     					p.sendMessage(ct(getConfig().getString("Messages.no-permissions")));
@@ -1510,7 +1635,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	public List<String> getPlayerNames() {
 		List<String> plys = new ArrayList<>();
 		for ( Player p : Bukkit.getOnlinePlayers() ) {
-			plys.add( p.getDisplayName() );
+			plys.add( p.getName() );
 		}
 		return plys;
 	}
@@ -1681,6 +1806,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	// Generates the message for the blacklisted users - Added v0.8.5 - 2/17/2017
 	public String showBlacklisted(Player p, int page) {
 			String blacklisted = "";
+			if ( getOther(blacklist_location).getConfigurationSection("blacklist") == null ) {
+				return getConfig().getString("Messages.blacklisted-layout").replace("%ITEMS%", blacklisted).replace("%PH#%", (0 + "").replace(".0", "")).replace("%PL#%", (page + "").replace(".0", "")).replace("%COUNT%", (0 + "").replace(".0", "")).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n");
+			}
 			double listLength = getOther(blacklist_location).getConfigurationSection("blacklist").getKeys(false).size();
 			double length = getConfig().getDouble("Other.blacklisted-length");
 			double pages = Math.ceil((double)listLength/(double)length);
@@ -1711,7 +1839,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	
 	// Generates the message for the ignored users - Added v0.8.5 - 2/17/2017
 	@SuppressWarnings("unused")
-	public String showIgnored(Player p, int page, int chatID) {
+	public String showIgnored(Player p, int page, ConfigurationSection chat) {
 		String ignored = "";
 		//double listLength = getOther(ignorelist_location).getConfigurationSection("ignorelist").getKeys(false).size();
 		double length = getConfig().getDouble("Other.ignored-length");
@@ -1720,17 +1848,22 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		int b = 1;
 		for (String uuid : getOther(ignorelist_location).getConfigurationSection("ignorelist").getKeys(false)) {
 			List<String> chats = getOther(ignorelist_location).getStringList("ignorelist." + uuid + ".chats");
-			for (String chat : chats) {
-				if (chat.equalsIgnoreCase(getCustomChats().getString(chatID + ".name"))) {
+			for (String key : getCustomChats().getKeys(false)) {
+				ConfigurationSection tChat = getCustomChats().getConfigurationSection(key);
+				if (tChat.getString("name").equalsIgnoreCase(chat.getString("name"))) {
 					String user = getOther(ignorelist_location).getString("ignorelist." + uuid + ".username");
 					if (i <= (getConfig().getInt("Other.ignored-length") * page)) {
 						if (i > getConfig().getInt("Other.ignored-length") * (page- 1)) {
 							if (ignored.equalsIgnoreCase("")) {
-								ignored = getConfig().getString("Messages.ignored-items").replace("%#%", i + "").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%NL%", "\n").replace("%PLAYER_NAME%", getOther(ignorelist_location).getString("ignorelist." + uuid + ".username")).replace("%PLAYER_UUID%", uuid);
+								ignored = getConfig().getString("Messages.ignored-items").replace("%#%", i + "")
+								.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name"))
+								.replace("%NL%", "\n").replace("%PLAYER_NAME%", getOther(ignorelist_location).getString("ignorelist." + uuid + ".username")).replace("%PLAYER_UUID%", uuid);
 								i++;
 							} else {
 								if (!user.equalsIgnoreCase("")) {
-									ignored = ignored + getConfig().getString("Messages.ignored-items").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%#%", i + "").replace("%NL%", "\n").replace("%PLAYER_NAME%", getOther(ignorelist_location).getString("ignorelist." + uuid + ".username")).replace("%PLAYER_UUID%", uuid);
+									ignored = ignored + getConfig().getString("Messages.ignored-items").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+									.replace("%CHAT_NAME%", chat.getString("name")).replace("%#%", i + "").replace("%NL%", "\n")
+									.replace("%PLAYER_NAME%", getOther(ignorelist_location).getString("ignorelist." + uuid + ".username")).replace("%PLAYER_UUID%", uuid);
 									i++;
 								}
 							}
@@ -1743,7 +1876,10 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			b++;
 		}
 		double pages = Math.ceil((double)(i-1)/(double)length);
-		String thed = getConfig().getString("Messages.ignored-layout").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%ITEMS%", ignored).replace("%PH#%", (pages + "").replace(".0", "")).replace("%PL#%", (page + "").replace(".0", "")).replace("%COUNT%", ((i-1) + "").replace(".0", "")).replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n");
+		String thed = getConfig().getString("Messages.ignored-layout").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+		.replace("%CHAT_NAME%", chat.getString("name")).replace("%ITEMS%", ignored)
+		.replace("%PH#%", (pages + "").replace(".0", "")).replace("%PL#%", (page + "").replace(".0", "")).replace("%COUNT%", ((i-1) + "").replace(".0", ""))
+		.replace("%PLAYER_NAME%", p.getName()).replace("%PLAYER_UUID%", p.getUniqueId().toString()).replace("%DISPLAY_NAME%", p.getDisplayName()).replace("%NL%", "\n");
 		if (ignored.equalsIgnoreCase("")) {
 			thed = "&cNo one was found on the ignored list\n";
 		}
@@ -1754,29 +1890,33 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	
 	// Generates the message for the swear list - Added v0.8.5 - 2/17/2017
 	@SuppressWarnings("unused")
-	public String showSwearListServer(int page, int chatID) {
+	public String showSwearListServer(int page, ConfigurationSection chat) {
 		String word = "";
 		String replace = "";
 		String items = "";
 		//double listLength = getOther(ignorelist_location).getConfigurationSection("ignorelist").getKeys(false).size();
-		double length = getOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name"))).getStringList("Dictionary").size();
+		double length = getOther(chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name"))).getStringList("Dictionary").size();
 		double pageLength = getConfig().getInt("Other.antiswear-list-server-length");
 		int i = 1;
-		for (String swear : getOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name"))).getStringList("Dictionary")) {
+		for (String swear : getOther(chat.getString("anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name"))).getStringList("Dictionary")) {
 			if (i <= (pageLength * page)) { // 15 * 2 = 30
 				if (i > pageLength * (page - 1)) { // 15 * 1 = 15
 					if (items.equalsIgnoreCase("")) {
 						if (swear.split(":").length > 1) {
-							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
+							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("ayout-tag"))
+							.replace("%CHAT_NAME%",chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
 						} else {
-							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", "");
+							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+							.replace("%CHAT_NAME%", chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", "");
 						}
 					} else {
 						if (length != 0) {
 							if (swear.split(":").length > 1) {
-								items = items + getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
+								items = items + getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+								.replace("%CHAT_NAME%", chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
 							} else {
-								items = items + getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", "");
+								items = items + getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+								.replace("%CHAT_NAME%", chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", "");
 							}
 						}
 					}
@@ -1787,7 +1927,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			i++;
 		}
 		double pages = Math.ceil((double)(length)/(double)pageLength);
-		String thed = getConfig().getString("Messages.antiswear-list-layout").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%ITEMS%", items).replace("%PH#%", (pages + "").replace(".0", "")).replace("%PL#%", (page + "").replace(".0", "")).replace("%COUNT%", length + "").replace(".0", "").replace("%NL%", "\n");
+		String thed = getConfig().getString("Messages.antiswear-list-layout").replace("%CHAT_TAG%", chat.getString("layout-tag"))
+		.replace("%CHAT_NAME%", chat.getString("name")).replace("%ITEMS%", items).replace("%PH#%", (pages + "").replace(".0", "")).replace("%PL#%", (page + "").replace(".0", ""))
+		.replace("%COUNT%", length + "").replace(".0", "").replace("%NL%", "\n");
 		if (items.equalsIgnoreCase("")) {
 			thed = "&cThe swear list appears to be empty\n";
 		}
@@ -1826,8 +1968,8 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- End Toggle Focus Mode
 
 	//---- Toggle Color Codes - v0.8.2
-	public boolean toggleColor(String code, int chatID) {
-		String[] color_codes = getCustomChats().getString(chatID + ".color-codes").split(" ");
+	public boolean toggleColor(String code, ConfigurationSection chat) {
+		String[] color_codes = chat.getString("color-codes").split(" ");
 		for (String color : color_codes) {
 			if (color.equalsIgnoreCase(code + ":true")) {
 				String theColors = "";
@@ -1846,7 +1988,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 						} 
 					}
 				}
-				getCustomChats().set(chatID + ".color-codes", theColors);
+				chat.set("color-codes", theColors);
 				saveCustomConfig();
 				reloadChats();
 				return true;
@@ -1867,7 +2009,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 						} 
 					}
 				}
-				getCustomChats().set(chatID + ".color-codes", theColors);
+				chat.set("color-codes", theColors);
 				saveCustomConfig();
 				reloadChats();
 				return true;
@@ -1891,6 +2033,8 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			saveConfig();
 			reloadConfig();
 		}
+		//---- Modifies the Ignore list using the chat count -- Removed 7/7/2025 v0.8.7
+		/*
 		int i = 0;
 		do {
 			for (String name : getCustomChats().getString(i + ".ignore-list").split(",")) {
@@ -1906,9 +2050,27 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			reloadChats();
 			i++;
 		} while (i < getCustomChats().getInt("Chat Count"));
-		 
+		*/
+
+		//---- Modifies the Ignore list -- Updated 7/7/2025 v0.8.7
+		for (String key : getCustomChats().getKeys( false )) {
+			ConfigurationSection chat = getCustomChats().getConfigurationSection( key );
+			for (String name : chat.getString("ignore-list").split(",")) {
+				if (!name.equalsIgnoreCase("")) {
+					if (getServer().getOfflinePlayer(name) != null) {
+						modifyIgnorelist(getServer().getOfflinePlayer(name).getUniqueId().toString(), getServer().getOfflinePlayer(name).getName(), chat, "+");
+					}					
+				}
+			}
+			chat.set("ignore-list", "");
+			saveCustomConfig();
+			reloadChats();
+		}
 	}
 	//---- End detect old blacklist ignore system
+
+	//----- Used to detect old chat.yml and port them over to the new system - v0.8.7
+
 
 	//---- Used to detect old configs and port them over to the new system - v0.8.2
 	public void checkOldConfgAndPort() {
@@ -2147,7 +2309,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			if (!getConfig().getBoolean("Other.Blacklist-Settings.can-ignore-chats.enabled")) {
 				return true;
 			} else {
-				if (inIgnorelist(getServer().getOfflinePlayer(player).getUniqueId().toString(), player, detectChatID(chat))) {
+				if (inIgnorelist(getServer().getOfflinePlayer(player).getUniqueId().toString(), player, detectChat(chat))) {
 					for (String c : getConfig().getStringList("Other.Blacklist-Settings.can-ignore-chats.specified-chats")) {
 						if (c.toLowerCase().equalsIgnoreCase(chat.toLowerCase())) { return true; }
 					}
@@ -2240,9 +2402,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	}
 	//---- End of broad cast
 	//---- Used to detect what colors are enabled for what chats. This was modified in v0.8.2 to accept custom chats
-	public Boolean checkColorCodes(String code, int id) {
+	public Boolean checkColorCodes(String code, ConfigurationSection chat) {
 		System.out.println(code + " - End of list");
-		for (String precolors: Arrays.asList(getCustomChats().getString(id + ".color-codes").split(" "))) {
+		for (String precolors: Arrays.asList(chat.getString("color-codes").split(" "))) {
 			List<String> temp = Arrays.asList(precolors.split(":"));
 			String colors = temp.get(0);
 			Boolean colorsState = Boolean.parseBoolean(temp.get(1));
@@ -2271,11 +2433,11 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- Ignore Check End
 	
 	//---- Output Color Codes - Added v0.8.2
-	public String outputColorCodes(int chatID) {
-		String text = getCustomChats().getString(chatID + ".name") + " Current Color Code Status\n";
+	public String outputColorCodes(ConfigurationSection chat) {
+		String text = chat.getString("name") + " Current Color Code Status\n";
 		@SuppressWarnings("unused")
 		int i = 0;
-		for (String precolors: Arrays.asList(getCustomChats().getString(chatID + ".color-codes").split(" "))) {
+		for (String precolors: Arrays.asList(chat.getString("color-codes").split(" "))) {
 			List<String> temp = Arrays.asList(precolors.split(":"));
 			String colors = temp.get(0);
 			Boolean colorsState = Boolean.parseBoolean(temp.get(1));
@@ -2308,37 +2470,39 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- End Output Color Codes
 		
 	//---- Used to send messages - Modified in v0.8.2 to accept custom chats
-	public String chatCleaner(String text , int id) {
-		if (text.contains("&0") && checkColorCodes("black", id) == true) { text = text.replace("&0", ChatColor.BLACK + ""); } else { text = text.replace("&0", "");}
-		if (text.contains("&1") && checkColorCodes("dark_blue", id) == true) { text = text.replace("&1", ChatColor.DARK_BLUE + ""); } else { text = text.replace("&1", "");}
-		if (text.contains("&2") && checkColorCodes("dark_green", id) == true) { text = text.replace("&2", ChatColor.DARK_GREEN + ""); } else { text = text.replace("&2", "");}
-		if (text.contains("&3") && checkColorCodes("dark_aqua", id) == true) { text = text.replace("&3", ChatColor.DARK_AQUA + ""); } else { text = text.replace("&3", "");}
-		if (text.contains("&4") && checkColorCodes("dark_red", id) == true) { text = text.replace("&4", ChatColor.DARK_RED + ""); } else { text = text.replace("&4", "");}
-		if (text.contains("&5") && checkColorCodes("dark_purple", id) == true) { text = text.replace("&5", ChatColor.DARK_PURPLE + ""); } else { text = text.replace("&5", "");}
-		if (text.contains("&6") && checkColorCodes("gold", id) == true) { text = text.replace("&6", ChatColor.GOLD + ""); } else { text = text.replace("&6", "");}
-		if (text.contains("&7") && checkColorCodes("gray", id) == true) { text = text.replace("&7", ChatColor.GRAY + ""); } else { text = text.replace("&7", "");}
-		if (text.contains("&8") && checkColorCodes("dark_gray", id) == true) { text = text.replace("&8", ChatColor.DARK_GRAY + ""); } else { text = text.replace("&8", "");}
-		if (text.contains("&9") && checkColorCodes("blue", id) == true) { text = text.replace("&9", ChatColor.BLUE + ""); } else { text = text.replace("&9", "");}
-		if (text.contains("&a") && checkColorCodes("green", id) == true) { text = text.replace("&a", ChatColor.GREEN + ""); } else { text = text.replace("&a", "");}
-		if (text.contains("&b") && checkColorCodes("aqua", id) == true) { text = text.replace("&b", ChatColor.AQUA + ""); } else { text = text.replace("&b", "");}
-		if (text.contains("&c") && checkColorCodes("red", id) == true) { text = text.replace("&c", ChatColor.RED + ""); } else { text = text.replace("&c", "");}
-		if (text.contains("&d") && checkColorCodes("light_purple", id) == true) { text = text.replace("&d", ChatColor.LIGHT_PURPLE + ""); } else { text = text.replace("&d", "");}
-		if (text.contains("&e") && checkColorCodes("yellow", id) == true) { text = text.replace("&e", ChatColor.YELLOW + ""); } else { text = text.replace("&e", "");}
-		if (text.contains("&f") && checkColorCodes("white", id) == true) { text = text.replace("&f", ChatColor.WHITE + ""); } else { text = text.replace("&f", "");}
-		if (text.contains("&k") && checkColorCodes("obfuscated", id) == true) { text = text.replace("&k", ChatColor.MAGIC + ""); } else { text = text.replace("&k", "");}
-		if (text.contains("&l") && checkColorCodes("bold", id) == true) { text = text.replace("&l", ChatColor.BOLD + ""); } else { text = text.replace("&l", "");}
-		if (text.contains("&m") && checkColorCodes("strikethrough", id) == true) { text = text.replace("&m", ChatColor.STRIKETHROUGH + ""); } else { text = text.replace("&m", "");}
-		if (text.contains("&n") && checkColorCodes("underline", id) == true) { text = text.replace("&n", ChatColor.UNDERLINE + ""); } else { text = text.replace("&n", "");}
-		if (text.contains("&o") && checkColorCodes("italic", id) == true) { text = text.replace("&o", ChatColor.ITALIC + ""); } else { text = text.replace("&o", "");}
-		if (text.contains("&r") && checkColorCodes("reset", id) == true) { text = text.replace("&r", ChatColor.RESET + ""); } else { text = text.replace("&r", "");}
+	public String chatCleaner(String text , ConfigurationSection chat) {
+		if (text.contains("&0") && checkColorCodes("black", chat) == true) { text = text.replace("&0", ChatColor.BLACK + ""); } else { text = text.replace("&0", "");}
+		if (text.contains("&1") && checkColorCodes("dark_blue", chat) == true) { text = text.replace("&1", ChatColor.DARK_BLUE + ""); } else { text = text.replace("&1", "");}
+		if (text.contains("&2") && checkColorCodes("dark_green", chat) == true) { text = text.replace("&2", ChatColor.DARK_GREEN + ""); } else { text = text.replace("&2", "");}
+		if (text.contains("&3") && checkColorCodes("dark_aqua", chat) == true) { text = text.replace("&3", ChatColor.DARK_AQUA + ""); } else { text = text.replace("&3", "");}
+		if (text.contains("&4") && checkColorCodes("dark_red", chat) == true) { text = text.replace("&4", ChatColor.DARK_RED + ""); } else { text = text.replace("&4", "");}
+		if (text.contains("&5") && checkColorCodes("dark_purple", chat) == true) { text = text.replace("&5", ChatColor.DARK_PURPLE + ""); } else { text = text.replace("&5", "");}
+		if (text.contains("&6") && checkColorCodes("gold", chat) == true) { text = text.replace("&6", ChatColor.GOLD + ""); } else { text = text.replace("&6", "");}
+		if (text.contains("&7") && checkColorCodes("gray", chat) == true) { text = text.replace("&7", ChatColor.GRAY + ""); } else { text = text.replace("&7", "");}
+		if (text.contains("&8") && checkColorCodes("dark_gray", chat) == true) { text = text.replace("&8", ChatColor.DARK_GRAY + ""); } else { text = text.replace("&8", "");}
+		if (text.contains("&9") && checkColorCodes("blue", chat) == true) { text = text.replace("&9", ChatColor.BLUE + ""); } else { text = text.replace("&9", "");}
+		if (text.contains("&a") && checkColorCodes("green", chat) == true) { text = text.replace("&a", ChatColor.GREEN + ""); } else { text = text.replace("&a", "");}
+		if (text.contains("&b") && checkColorCodes("aqua", chat) == true) { text = text.replace("&b", ChatColor.AQUA + ""); } else { text = text.replace("&b", "");}
+		if (text.contains("&c") && checkColorCodes("red", chat) == true) { text = text.replace("&c", ChatColor.RED + ""); } else { text = text.replace("&c", "");}
+		if (text.contains("&d") && checkColorCodes("light_purple", chat) == true) { text = text.replace("&d", ChatColor.LIGHT_PURPLE + ""); } else { text = text.replace("&d", "");}
+		if (text.contains("&e") && checkColorCodes("yellow", chat) == true) { text = text.replace("&e", ChatColor.YELLOW + ""); } else { text = text.replace("&e", "");}
+		if (text.contains("&f") && checkColorCodes("white", chat) == true) { text = text.replace("&f", ChatColor.WHITE + ""); } else { text = text.replace("&f", "");}
+		if (text.contains("&k") && checkColorCodes("obfuscated", chat) == true) { text = text.replace("&k", ChatColor.MAGIC + ""); } else { text = text.replace("&k", "");}
+		if (text.contains("&l") && checkColorCodes("bold", chat) == true) { text = text.replace("&l", ChatColor.BOLD + ""); } else { text = text.replace("&l", "");}
+		if (text.contains("&m") && checkColorCodes("strikethrough", chat) == true) { text = text.replace("&m", ChatColor.STRIKETHROUGH + ""); } else { text = text.replace("&m", "");}
+		if (text.contains("&n") && checkColorCodes("underline", chat) == true) { text = text.replace("&n", ChatColor.UNDERLINE + ""); } else { text = text.replace("&n", "");}
+		if (text.contains("&o") && checkColorCodes("italic", chat) == true) { text = text.replace("&o", ChatColor.ITALIC + ""); } else { text = text.replace("&o", "");}
+		if (text.contains("&r") && checkColorCodes("reset", chat) == true) { text = text.replace("&r", ChatColor.RESET + ""); } else { text = text.replace("&r", "");}
+		//---- RGB Supported Coming Soon -- Started 7/7/2025
+		//if (text.contains("&#") && checkColorCodes("reset", chat) == true) { text = text.replace("&r", ChatColor.RESET + ""); } else { text = text.replace("&r", "");}
 		
 		return text;
 	}
 	public void pMessage(String msg, Player p) { 
 		p.sendMessage(ct("&8[&9VPC&8] &2" + msg));
 	}
-	public String pSend(String msg, Player p1, Player p2, String layout, int id) {
-		String tag = ct(getCustomChats().getString(layout)).replace("%PLAYER%", p2.getName()).replace("%DISPLAY_NAME%", p2.getDisplayName()).replace("%MESSAGE%", chatCleaner(msg, id)).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString());
+	public String pSend(String msg, Player p1, Player p2, String layout, ConfigurationSection chat) {
+		String tag = ct(chat.getString(layout)).replace("%PLAYER%", p2.getName()).replace("%DISPLAY_NAME%", p2.getDisplayName()).replace("%MESSAGE%", chatCleaner(msg, chat)).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString());
 		/* - Removed v0.8.2 - Removed wheen we added the custom chats - 10/3/16
 		if(rank == "Mod") { tag = ct(getConfig().getString("Tag.mod.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "mod")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
 		if(rank == "Admin") { tag = ct(getConfig().getString("Tag.admin.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "admin")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
@@ -2356,18 +2520,17 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	}
     
 	@SuppressWarnings("deprecation")
-	public void sendMessages(String msg, Player player, String permissin, String layout, int id) {
-		int chatID = id;
-    	if(player.hasPermission(permissin) && !inIgnorelist(player.getUniqueId().toString(), player.getName(), id)) {
-    		if (checkTalkChatSpecified(player.getName(), getCustomChats().getString(id + ".name").toLowerCase())) {
-	    		if (getCustomChats().getBoolean(id  + ".enabled")) {
+	public void sendMessages(String msg, Player player, String permission, String layout, ConfigurationSection chat) {
+    	if(player.hasPermission(permission) && !inIgnorelist(player.getUniqueId().toString(), player.getName(), chat)) {
+    		if (checkTalkChatSpecified(player.getName(), chat.getString("name").toLowerCase())) {
+	    		if (chat.getBoolean("enabled")) {
 	    			for(Player p : Bukkit.getOnlinePlayers()) {
-	    	    		if(p.hasPermission(permissin) && !inIgnorelist(p.getUniqueId().toString(), p.getName(), id) && checkViewChatSpecified(p.getName().toLowerCase(), getCustomChats().getString(id + ".name").toLowerCase()) && getPlayerIgnoreStatus(getServer().getOfflinePlayer(player.getName()), p).equalsIgnoreCase("&cunignored")) {
-    	    				pSend(msg, p, player, layout, id);	    	    			
+	    	    		if(p.hasPermission(permission) && !inIgnorelist(p.getUniqueId().toString(), p.getName(), chat) && checkViewChatSpecified(p.getName().toLowerCase(), chat.getString("name").toLowerCase()) && getPlayerIgnoreStatus(getServer().getOfflinePlayer(player.getName()), p).equalsIgnoreCase("&cunignored")) {
+    	    				pSend(msg, p, player, layout, chat);	    	    			
 	    	    		}
 	    	    	}
 	    		} else { 
-	    			pMessage(getConfig().getString("Messages.chat-disabled").replace("%CHAT_TAG%", getCustomChats().getString(chatID + ".layout-tag")).replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name")).replace("%CHAT_ID%", chatID + "").replace("%PLAYER%", player.getName()).replace("%DISPLAY_PLAYER%", player.getDisplayName().replace("%STATE%", "Disabled")).replace("%STATUS%", "").replace("%LIST%", "").replace("%STATUS%", ""), player);    			
+	    			pMessage(getConfig().getString("Messages.chat-disabled").replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")).replace("%PLAYER%", player.getName()).replace("%DISPLAY_PLAYER%", player.getDisplayName().replace("%STATE%", "Disabled")).replace("%STATUS%", "").replace("%LIST%", "").replace("%STATUS%", ""), player);    			
 	    		}
     		} else { 
     			pMessage("You are currently blacklisted from this chat and may not chat in this chat.", player);
@@ -2398,7 +2561,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		//---- End Modify Blacklist
 		
 		// Modify IgnoreList - v0.8.5 - 2/15/2017 - Added to simplify ignore list system
-		public void modifyIgnorelist(String uuid, String name, int chat, String modification) {
+		public void modifyIgnorelist(String uuid, String name, ConfigurationSection chat, String modification) {
 			List<String> l = new ArrayList<>();
 			switch (modification) {
 			case "+":
@@ -2406,13 +2569,13 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 				if (getOther(ignorelist_location).get("ignorelist." + uuid) != null) {
 					l = getOther(ignorelist_location).getStringList("ignorelist." + uuid + ".chats");
 					for (String c : l) {
-						if (c.equalsIgnoreCase(getCustomChats().getString(chat + ".name"))) {
+						if (c.equalsIgnoreCase(chat.getString("name"))) {
 							return;
 						}
 					}
-					l.add(getCustomChats().getString(chat + ".name"));
+					l.add(chat.getString("name"));
 				} else {
-					l.add(getCustomChats().getString(chat + ".name"));
+					l.add(chat.getString("name"));
 				}
 				ssOther(ignorelist_location, "ignorelist." + uuid + ".chats", l);
 				break;
@@ -2421,18 +2584,18 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 					ssOther(ignorelist_location, "ignorelist." + uuid + ".username", name);
 					if (getOther(ignorelist_location).contains("ignorelist." + uuid)) {
 						l = getOther(ignorelist_location).getStringList("ignorelist." + uuid + ".chats");
-						if (l.size() == 1 & l.get(0).equalsIgnoreCase(getCustomChats().getString(chat + ".name"))) {
+						if (l.size() == 1 & l.get(0).equalsIgnoreCase(chat.getString("name"))) {
 							if (getOther(ignorelist_location).get("ignorelist." + uuid + ".players") != null) {
 								ssOther(ignorelist_location, "ignorelist." + uuid + ".chats", new ArrayList<>());
 							} else {
 								ssOther(ignorelist_location, "ignorelist." + uuid, null);
 							}
 							return;
-						} else if (l.size() == 1 && !l.get(0).equalsIgnoreCase(getCustomChats().getString(chat + ".name"))){
+						} else if (l.size() == 1 && !l.get(0).equalsIgnoreCase(chat.getString("name"))){
 							ssOther(ignorelist_location, "ignorelist." + uuid + ".username", name);
 							return;
 						}
-						l.remove(getCustomChats().getString(chat + ".name"));
+						l.remove(chat.getString("name"));
 						ssOther(ignorelist_location, "ignorelist." + uuid + ".chats", l);	
 					} else {
 					}
@@ -2464,10 +2627,10 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		// ---- End Detect Player Blacklist
 		
 		// Detect Player Blacklist - v0.8.5 - 2/15/2017 - Added to detect if a player is inside the blacklist
-		public boolean inIgnorelist(String uuid, String name, int chat) {
+		public boolean inIgnorelist(String uuid, String name, ConfigurationSection chat) {
 			if (getOther(ignorelist_location).contains("ignorelist." + uuid)) {
 				for (String c : getOther(ignorelist_location).getStringList("ignorelist." + uuid + ".chats")) {
-					if (c.equalsIgnoreCase(getCustomChats().getString(chat + ".name"))) {
+					if (c.equalsIgnoreCase(chat.getString("name"))) {
 						return true;
 					}
 				}
@@ -2558,10 +2721,11 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			}
 		}
 		
-		public String antiswearServerCheck(String msg, int chatID) {
+		//---- Updated the way we handle chats - v0.8.7
+		public String antiswearServerCheck(String msg, ConfigurationSection chat) {
 			//removed messages will equal - ERROR: 1337 - Banned Message
-			
-			List<String> l = getOther(getCustomChats().getString(chatID + ".anti-swear.server.file-name").replace("%CHAT_NAME%", getCustomChats().getString(chatID + ".name"))).getStringList("Dictionary");
+			getLogger().info( "banned word:1" );
+			List<String> l = getOther(chat.getString(".anti-swear.server.file-name").replace("%CHAT_NAME%", chat.getString("name"))).getStringList("Dictionary");
 			String[] msgSplit = msg.split(" ");
 			String final_msg = "";
 			for (String msgWord : msgSplit) {	
@@ -2630,6 +2794,10 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			return final_msg;
 		}
 		
+
+		//---- Gets the server anti swerar toggle state ---- v?
+		//---- Removed v0.8.7 - This is no longer required
+		/*
 		public boolean serverAntiSwear(int chatID) {
 			if (getCustomChats().getBoolean(chatID + ".anti-swear.server.enabled")) {
 				return true;
@@ -2638,7 +2806,8 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			}
 			
 		}
-		
+		*/
+		// End Anti Swear Toggle State
 		
 	 // Added the ability to have a custom chats config! - v0.8.2 - 10/3/2016
     private FileConfiguration customChatsConfig = null; //customConfig 

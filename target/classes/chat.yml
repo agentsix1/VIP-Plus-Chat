@@ -1,5 +1,4 @@
-Chat Count: 9
-'0':
+Moderator:
   name: Moderator
   command:
   - mo
@@ -21,7 +20,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'1':
+Administrator:
   name: Administrator
   command:
   - ad
@@ -43,7 +42,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'2':
+Owner:
   name: Owner
   command:
   - ow
@@ -65,7 +64,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'3':
+Staff:
   name: Staff
   command:
   - st
@@ -87,7 +86,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'4':
+Developer:
   name: Developer
   command:
   - de
@@ -109,7 +108,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'5':
+VIP:
   name: VIP
   command:
   - v
@@ -131,7 +130,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'6':
+Donator:
   name: Donator
   command:
   - do
@@ -153,7 +152,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'7':
+Special:
   name: Special
   command:
   - sp
@@ -175,7 +174,7 @@ Chat Count: 9
     player:
       enabled: false
       file-name: '/files/antiswear/players/%PLAYER%.yml'
-'8':
+Elite:
   name: Elite
   command:
   - el

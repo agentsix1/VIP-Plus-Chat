@@ -1,11 +1,10 @@
 package me.kronix.staffchat.events;
 
-import org.bukkit.ChatColor;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
-import org.bukkit.plugin.java.JavaPlugin;
 
 import me.kronix.staffchat.StaffChat;
 
@@ -16,7 +15,8 @@ public class evnOnChat implements Listener {
     public evnOnChat(StaffChat plugin) {
         this.staffchat = plugin;
     }
-
+    //---- On player chat this handles Symbol Chat and Anti-swear of messaging -- Removed 7/7/2025 0.8.7
+    /*
     @EventHandler
     public void onPlayerChat(AsyncPlayerChatEvent event) {
         String msg = event.getMessage();
@@ -53,6 +53,50 @@ public class evnOnChat implements Listener {
 								}
 						} else {
 							staffchat.sendMessages(msg, p, "vippluschat.chat." + staffchat.getCustomChats().getString(chatID + ".permission"), chatID + ".layout", chatID);
+						}
+				}
+			} catch (ArrayIndexOutOfBoundsException catcherror) {
+			}
+		}
+    }
+    */
+    //---- On player chat this handles Symbol Chat and Anti-swear of messaging -- Updated 7/7/2025 0.8.7
+    @EventHandler
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        String msg = event.getMessage();
+        Player p = event.getPlayer();
+		
+		if (p.hasPermission("vippluschat.allowchat")) {
+			
+			try {
+                String symbol = "";
+                ConfigurationSection chat = null;
+                for (String key : staffchat.getCustomChats().getKeys( false )) {
+                    ConfigurationSection tchat = staffchat.getCustomChats().getConfigurationSection( key );
+                    if ( tchat.getString("chat-symbol" ).equalsIgnoreCase( "none" ) ) { continue; }
+                    if ( msg.startsWith( tchat.getString("chat-symbol" ) ) ) {
+                        symbol = tchat.getString("chat-symbol" );
+                        chat = tchat;
+                        break;
+                    }
+                }
+
+                if ( chat == null ) { return; }
+				
+				if (p.hasPermission("vippluschat.chat." + chat.getString("permission"))) {
+						msg = msg.replace( symbol, "" );
+						event.setCancelled(true);
+						if (chat.getBoolean("anti-swear.server.enabled")) {
+							 msg = staffchat.antiswearServerCheck(msg, chat);
+								if (msg.equalsIgnoreCase("ERROR: 1337 - Banned Message")) {
+									staffchat.pMessage(staffchat.getConfig().getString("Messages.antiswear-banned")
+                                    .replace("%CHAT_TAG%", chat.getString("layout-tag"))
+                                    .replace("%CHAT_NAME%", chat.getString("name")), p);
+								} else {
+									staffchat.sendMessages(msg, p, "vippluschat.chat." + chat.getString("permission"), "layout", chat);
+								}
+						} else {
+							staffchat.sendMessages(msg, p, "vippluschat.chat." + chat.getString("permission"), "layout", chat);
 						}
 				}
 			} catch (ArrayIndexOutOfBoundsException catcherror) {

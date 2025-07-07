@@ -3,7 +3,7 @@ version: 0.8.6
 description: Chat channels for away from the public eye.
 author: Agentsix1
 main: me.kronix.staffchat.StaffChat
-api-version: 1.16
+api-version: 1.13
 folia-supported: true
 commands:
   vpc:

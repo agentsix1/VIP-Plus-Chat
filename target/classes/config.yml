@@ -1,6 +1,7 @@
 Check Version: true
 Messages:
   no-permissions: '&cYou do not have the permission required to do this action!'
+  no-args: '&7You are using &9VIP+ Chat %VERSION%&7!'
   chat-disabled: '&c%CHAT_NAME% is currently disabled. Please try again later.'
   reload: '&aVIP+ Chat config has been reloaded!'
   toggle: '&7You have currently set &9%CHAT_NAME% &7to state &9%STATE%.'
@@ -76,4 +77,4 @@ Other:
       enabled: false
       specified-chats:
       - none
-  broadcast: true
+  broadcast: false
