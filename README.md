@@ -5,9 +5,11 @@ One of the best and customizable vip/staff chat plugins on spigot!
 ### [Previous Release](https://github.com/agentsix1/VIP-Plus-Chat/raw/refs/heads/main/target/staffchat-0.8.6.jar) - Download v0.8.6 (Support for 1.13+)
 <details>
   <summary>Archive Build (Click Here)</summary>
+
   [Archive Build 0.8.5](https://www.spigotmc.org/resources/vip-chat-advanced.3308/) - Download v0.8.5 (Support for 1.6.4+)
 
 </details>
+
 ### Change Log v0.8.7 - Changed July 7th 2025 (Dev Build)
 **Updates**
 - Recoded how chats are handled
