@@ -9,14 +9,21 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
+import java.lang.module.Configuration;
 import java.lang.reflect.Field;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
+import java.util.Set;
 import java.util.logging.Level;
 
 import org.apache.commons.lang.StringUtils;
@@ -38,9 +45,11 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import jdk.jfr.internal.LogLevel;
 import me.kronix.staffchat.commands.cmdChat;
 import me.kronix.staffchat.commands.cmdFastFocus;
 import me.kronix.staffchat.events.evnOnChat;
+import sun.security.util.FilePaths;
 
 
 /*
@@ -232,7 +241,7 @@ import me.kronix.staffchat.events.evnOnChat;
 
 public class StaffChat extends JavaPlugin implements Listener, TabCompleter  {
 	//---- This is used to easily grab the current version of the program - Added v0.8
-public String version = "v0.8.6";
+public String version = "v0.8.7";
 public HashMap<Player, String> focus = new HashMap<>();
 public final String blacklist_location = "\\"+"files"+"\\"+"blacklist.yml";
 public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
@@ -240,6 +249,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	@Override
 	public void onEnable(){
 		Bukkit.getServer().getPluginManager().registerEvents(this, this);
+		checkOldChatAndPort(); // Added v0.8.7 -- 7/7/2025
 		checkOldConfgAndPort();
 		loadConfiguration();
 		loadChats();
@@ -257,8 +267,15 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- End config.yml
 	//---- This is used to create the default chat.yml and was added in v0.8.2 to allow for custom chats and to clean up the original config.yml
 	public void loadChats(){
-	    getCustomChats().options().copyDefaults(true);
-	    saveCustomConfig();
+		File file = new File(getDataFolder(), "chat.yml");
+
+		// Only copy defaults if the file doesn't exist
+		if (!file.exists()) {
+			getCustomChats().options().copyDefaults(true);
+			saveCustomConfig();
+		} else {
+			reloadChats();
+		}
 	}
 	//---- End Chat.yml
 	
@@ -866,12 +883,30 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	        					 * - %shit%:rip - Replaces the word containing
 	        					 * - #shit#: - Blacks message containing
 	        					 */
+
+								 if ( args.length == 4 && args[3].contains( ":" )) { 
+									pMessage(getConfig().getString("Messages.antiswear-chat-syntax").replace("%COMMAND%", "/vpc swear {add,+} {chat} {word} | Optional: {replacement word}"), p);
+	        						return false;
+								}
+								if ( args.length == 5 && (args[3].contains( ":" ) || args[4].contains( ":" ) )) { 
+									pMessage(getConfig().getString("Messages.antiswear-chat-syntax").replace("%COMMAND%", "/vpc swear {add,+} {chat} {word} | Optional: {replacement word}"), p);
+	        						return false;
+								}
 	        					
 	        					if (getOther(loc).getStringList("Dictionary").size() > 0) {
+									for ( String word : getOther(loc).getStringList("Dictionary") ) {
+										if ( word.contains(":")) {
+											if ( word.split(":")[0].equalsIgnoreCase( args[3] ) && args.length >= 4) { 
+												pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3])
+												.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
+												return true;
+											}
+										}
+									}
 	        						List<String> l = getOther(loc).getStringList("Dictionary");
 	        						if (args.length == 4) {
 	        							if (l.remove(args[3] + ":")) {
-	        								pMessage(getConfig().getString("Messages.antiswear-word-already").replace("%WORD%", args[3])
+	        								pMessage(getConfig().getString("Messages.antiswear-world-already").replace("%WORD%", args[3])
 											.replace("%CHAT_TAG%", chat.getString("layout-tag")).replace("%CHAT_NAME%", chat.getString("name")), p);
 	        							} else {
 	        								l.add(args[3] + ":");
@@ -923,7 +958,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		    							// word:replacement
 		    							// word - remove it
 		    							for (String w : l) {
-			    							if (w.split(":").length == 1) {
+			    							if (w.split(":").length >= 1) {
 			    								if (w.split(":")[0].equalsIgnoreCase(args[3])) {
 			    									l.remove(w);
 			    									ssOther(loc, "Dictionary", l);
@@ -1728,38 +1763,41 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 					
                     switch (args[1].toLowerCase()) {
                         case "toggle":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
                         case "list":
                             completions.addAll(getChatList( ply ));
                             break;
                         case "add":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
                         case "+":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
                         case "del":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
                         case "delete":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
                         case "rem":
-							completions = new ArrayList<String>();
+							completions.addAll(getChatList( ply ));
 							break;
-                        case "remove":
-							completions = new ArrayList<String>();
+						case "remove":
+							completions.addAll(getChatList( ply ));
+							break;
+						case "-":
+								completions.addAll(getChatList( ply ));
 							break;
                         case "clear":
-                            completions.addAll(getChatList( ply )); // Replace with actual chat options
+                            completions.addAll(getChatList( ply ));
                             break;
                     }
                 }
             } else if (args.length == 4 && args[0].equalsIgnoreCase("swear") && Arrays.asList("add", "+", "del", "delete", "rem", "remove", "clear").contains(args[1].toLowerCase())) {
-                completions.addAll(Arrays.asList("exampleWord1", "exampleWord2")); // Replace with actual words
+                completions.addAll(Arrays.asList("Word_To_Replace")); // Replace with actual words
             } else if (args.length == 5 && args[0].equalsIgnoreCase("swear") && Arrays.asList("add", "+", "del", "delete", "rem", "remove", "clear").contains(args[1].toLowerCase())) {
-                completions.add("replacementText"); // Replace with actual replacement suggestions
+                completions.add("Replacement_Word"); // Replace with actual replacement suggestions
             }
         }
         return completions;
@@ -1902,8 +1940,9 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			if (i <= (pageLength * page)) { // 15 * 2 = 30
 				if (i > pageLength * (page - 1)) { // 15 * 1 = 15
 					if (items.equalsIgnoreCase("")) {
+						if ( swear.contains( "::") ) { length-=1; continue; }
 						if (swear.split(":").length > 1) {
-							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("ayout-tag"))
+							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
 							.replace("%CHAT_NAME%",chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
 						} else {
 							items = getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
@@ -1911,6 +1950,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 						}
 					} else {
 						if (length != 0) {
+							if ( swear.contains( "::") ) { length-=1; continue; }
 							if (swear.split(":").length > 1) {
 								items = items + getConfig().getString("Messages.antiswear-list-items").replace("%#%", i + "").replace("%CHAT_TAG%", chat.getString("layout-tag"))
 								.replace("%CHAT_NAME%", chat.getString("name")).replace("%NL%", "\n").replace("%WORD%", swear.split(":")[0]).replace("%REPLACEMENT%", swear.split(":")[1]);	
@@ -2069,8 +2109,54 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	}
 	//---- End detect old blacklist ignore system
 
-	//----- Used to detect old chat.yml and port them over to the new system - v0.8.7
+	//---- Used to detect old chat.yml configs and port them over  to the new sy stem - v0.8.7 -- Added 7/7/2025
 
+	char[] SYMBOLS = {
+        '!', '@', '#', '$', '%', '^', '&', '*', '(', ')',
+        '-', '_', '=', '+', '[', ']', '{', '}', ';', ':',
+        '\'', '"', '<', '>', ',', '.', '/', '?', '\\', '|', '~', '`'
+    };
+
+	Random random = new Random();
+
+	public void checkOldChatAndPort() {
+		String a = getCustomChats().getString("Chat Count");
+		if ( a == null ) {
+			return;
+		}
+		getLogger().warning("[VPC] Old Chat.yml file detected. Attempting to port to latest version of chat.yml!");
+		File file = new File(getDataFolder(), "chat.yml");
+		File file2 = new File(getDataFolder(), "oldchat.yml");
+		file.renameTo(file2);
+		
+
+		FileConfiguration oldchat = getOther(File.separator + "oldchat.yml");
+		FileConfiguration chat = getOther(File.separator + "chat.yml");
+
+		oldchat.set("Chat Count", null);
+
+		for ( String key : oldchat.getKeys(false)) {
+			ConfigurationSection oc = oldchat.getConfigurationSection(key);
+			for ( String _key : oc.getKeys(false )) {
+				chat.set( oc.get("name") + "." + _key, oc.get( _key ) );
+			}
+			
+			if ( chat.getString("fastfocus-command") == null ) chat.set(oc.get("name") + "." + "fastfocus-command", (oc.getString("name").substring( 0, 2 )+ "focus").toLowerCase() );
+			if ( chat.getString("chat-symbol") == null ) chat.set(oc.get("name") + "." + "chat-symbol",  SYMBOLS[random.nextInt(SYMBOLS.length)] );
+			
+			try {
+				chat.save(getDataFolder() + File.separator + "chat.yml");
+			} catch (IOException ex) {
+			}
+			
+			
+		}
+
+
+		reloadChats();
+		getLogger().warning("[VPC] Chat.yml file conversion process is complete!");
+		
+	}
 
 	//---- Used to detect old configs and port them over to the new system - v0.8.2
 	public void checkOldConfgAndPort() {

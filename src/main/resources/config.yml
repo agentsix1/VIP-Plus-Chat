@@ -49,9 +49,9 @@ Messages:
   antiswear-syntax: '&cIt appears you did not enter a proper command. Please try again: &6%COMMAND%'
   antiswear-word-remove: '&7The word &9%WORD% &7was %STATE% &7from %CHAT_TAG%''s &7swear list.'
   antiswear-word-add: '&7The word &9%WORD% &7has been added to %CHAT_TAG%''s swear list.'
+  antiswear-word-already: '&7It appears the dictionary already contains &c%WORD% &7for swear list %CHAT_TAG%&7.'
   antiswear-word-clear: '&7You have cleared the swear dictionary for %CHAT_TAG%&7.'
   antiswear-banned: '&cIt appears you have used a word that is not allowed in %CHAT_TAG%&c'
-  antiswear-already: '&cIt appears the dictionary already contains &9%WORD% &7for swear list %CHAT_TAG%&c.'
   antiswear-list-layout: '&6--- &9Swear Dictionary &f[%CHAT_TAG%&f] &7(&c%COUNT%&7)&6 ---%NL%%ITEMS%&6Page &7(&9%PL#%&7/&9%PH#%&7) &6/vpc swear list {#}'
   antiswear-list-items: '&6%#%. &7%WORD% &9-&7 %REPLACEMENT%%NL%'
 Other:
