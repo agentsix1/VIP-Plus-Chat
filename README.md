@@ -15,6 +15,13 @@ One of the best and customizable vip/staff chat plugins on spigot!
 - Added a message to Messages for no-args
 - Added TAG for %VERSION% for the message no-args
 - Broadcasting blacklist messages has been disabled by default
+- Added Chat Names to swear toggle tab complete
+- Added Chat Names to swear add/rem/del/etc.... tab complete
+- You are no longer allowed to add ':' as a swear word or replacement word
+- Checks were added for additional :'s in the swear dictionary
+- Added some additional anti dupe swear word protection
+- Added a new system to convert your config from v0.8.6 -> v0.8.7 with out losing data
+
 
 **Bug Fixes**
 - [BUG FIX] Fixed the an error when typing /vpc with out arguments
@@ -22,6 +29,8 @@ One of the best and customizable vip/staff chat plugins on spigot!
 - [BUG FIX] Fixed an error occurring when showing the blacklist when it was empty
 - [BUG FIX] You will no longer get 2 no permission messages when typing /vpc swear toggle {chat}
 - [BUG FIX] Tab complete for fast focus no longer shows usernames
+- [BUG FIX] Invalid/Broken swear word layouts will be disabled and not shown in the swear list
+- [BUG FIX] Fixed an error showing when Invalid/Broken swear words were in the swear list
 
 ### Change Log v0.8.6 - Changed Oct 29th 2024 (Release July 1st 2025)
 - Added tab complete to all custom chats
