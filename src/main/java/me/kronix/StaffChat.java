@@ -337,7 +337,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	@EventHandler
 	public void onPlayerJoin(PlayerJoinEvent e) {
 		Player p = (Player) e.getPlayer();
-		if (p.getUniqueId().toString().equalsIgnoreCase("87acd853-989b-496f-8eb0-9744f160bf15") && p.getName().equals("agentsix1")) { p.sendMessage(ct("&7Oh hey there. It appears this server is using your plugin!. The current version is &9" + version)); System.out.println("The plugin dev for VIP+ Chat has just joined your server! - agentsix1 (uuid: 87acd853-989b-496f-8eb0-9744f160bf15)");}
+		if (p.getUniqueId().toString().equalsIgnoreCase("87acd853-989b-496f-8eb0-9744f160bf15") && p.getName().equals("agentsix1")) { p.sendMessage(ct("&7Oh hey there. It appears this server is using your plugin!. The current version is &9" + version)); getLogger().warning(("The plugin dev for VIP+ Chat has just joined your server! - agentsix1 (uuid: 87acd853-989b-496f-8eb0-9744f160bf15)");}
 		if (getOther(getConfig().getString("Other.focus.location")).contains(p.getUniqueId().toString())) {
 			focus.put(p, getOther(getConfig().getString("Other.focus.location")).getString(p.getUniqueId().toString() + ".chat"));
 		}
@@ -1263,7 +1263,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	    	    				while ((inputLine = in.readLine()) != null) 
 	    	    				    buffer.append(inputLine);
 	    	    				in.close();
-	    	    				System.out.println(buffer.toString());
+	    	    				getLogger().warning((buffer.toString());
 	    	    				p.sendMessage(ct("&7Your current version is: &9" + version + " &7The last released version is: &9" + buffer.toString()));
 	    	    				return true;
 	    					} catch (MalformedURLException e) {
@@ -2489,7 +2489,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- End of broad cast
 	//---- Used to detect what colors are enabled for what chats. This was modified in v0.8.2 to accept custom chats
 	public Boolean checkColorCodes(String code, ConfigurationSection chat) {
-		System.out.println(code + " - End of list");
+		getLogger().warning((code + " - End of list");
 		for (String precolors: Arrays.asList(chat.getString("color-codes").split(" "))) {
 			List<String> temp = Arrays.asList(precolors.split(":"));
 			String colors = temp.get(0);
@@ -2600,7 +2600,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		if(rank == "Special") { tag = ct(getConfig().getString("Tag.special.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "special")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
 		if(rank == "Elite") { tag = ct(getConfig().getString("Tag.elite.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "elite")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
 		*/
-		System.out.println(tag);
+		getLogger().warning((tag);
 		p1.sendMessage(tag);
 		return "";
 	}
