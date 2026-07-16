@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 import java.util.logging.Level;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang.StringUtils;
 import org.bukkit.Bukkit;
@@ -63,6 +65,10 @@ import sun.security.util.FilePaths;
 	- /vpc info now displays your information such as blacklist state, focused chats, ignored players, ignored chats
 	- /vpc info {player} now displays the players information such as blacklist state, focused chats, ignored players, ignored chats
 	- /vpc focused will now display what channel you are currently focused on
+
+	Change Log v0.8.9 - Changed Jul 15th 2026
+	- Added full support for rgb color codes &#RRGGBB
+	- Removed console spam from message logging
  */
 
 /* List of commands - Added v0.8.2 - Updated v0.8.5 - 2/14/2017, 2/15/2017
@@ -253,6 +259,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		checkOldConfgAndPort();
 		loadConfiguration();
 		loadChats();
+		checkAndAddRgbColorCode(); // Added v0.8.9 -- 7/15/2026
 		loadOther();
 		loadChatCommands();
 		loadChatFocusCommands();
@@ -265,6 +272,41 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	
 	}
 	//---- End config.yml
+
+	//---- Ensure rgb exists in color-codes - Added v0.8.9 - 7/15/2026
+	public void checkAndAddRgbColorCode() {
+		boolean updated = false;
+
+		for (String key : getCustomChats().getKeys(false)) {
+			ConfigurationSection chat = getCustomChats().getConfigurationSection(key);
+			if (chat == null) continue;
+
+			String colorCodes = chat.getString("color-codes");
+			if (colorCodes == null || colorCodes.equalsIgnoreCase("")) continue;
+
+			// Already has rgb:true or rgb:false
+			boolean hasRgb = false;
+			for (String entry : colorCodes.split(" ")) {
+				String name = entry.split(":")[0];
+				if (name.equalsIgnoreCase("rgb")) {
+					hasRgb = true;
+					break;
+				}
+			}
+
+			if (!hasRgb) {
+				chat.set("color-codes", colorCodes + " rgb:true");
+				updated = true;
+				getLogger().warning("[VPC] Added missing rgb color-code to chat: " + chat.getString("name"));
+			}
+		}
+
+		if (updated) {
+			saveCustomConfig();
+			reloadChats();
+		}
+	}
+
 	//---- This is used to create the default chat.yml and was added in v0.8.2 to allow for custom chats and to clean up the original config.yml
 	public void loadChats(){
 		File file = new File(getDataFolder(), "chat.yml");
@@ -1751,7 +1793,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			} else if ( args.length == 3 && args[0].equalsIgnoreCase( "colors" ) && args[1].equalsIgnoreCase("toggle") ) {
 				completions.addAll(getChatList( ply ));
 			} else if ( args.length == 4 && args[0].equalsIgnoreCase( "colors" ) && args[1].equalsIgnoreCase("toggle") ) {
-				completions.addAll(Arrays.asList("black", "dark_blue", "dark_green", "dark_aqua", "dark_red", "dark_purple", "gold", "gray", "dark_gray", "blue", "green", "aqua", "red", "light_purple", "yellow", "white", "obfuscated", "bold", "strikethrough"));
+				completions.addAll(Arrays.asList("rgb","black", "dark_blue", "dark_green", "dark_aqua", "dark_red", "dark_purple", "gold", "gray", "dark_gray", "blue", "green", "aqua", "red", "light_purple", "yellow", "white", "obfuscated", "bold", "strikethrough"));
 			} else if ( args.length == 3 && ( args[0].equalsIgnoreCase( "blacklist" )) ) {
 				completions.addAll( plys );
 			} else if ( args.length == 3 && ( args[0].equalsIgnoreCase( "ignored" )) ) {
@@ -2476,10 +2518,54 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		}*/
 	}
 	//---- End forceunignore
-	//---- Used to color not message chats - Added v0.7
+	//---- Used to color not message chats - Updated v0.8.9 - 7/15/2026
+	/* Removed in v0.8.9 - 7/15/2026 - Removed and replaced with full support for rgb
 	public static String ct(String text) {
 		return text.replace("&0", ChatColor.BLACK + "").replace("&1", ChatColor.DARK_BLUE + "").replace("&2", ChatColor.DARK_GREEN + "").replace("&3", ChatColor.DARK_AQUA + "").replace("&4", ChatColor.DARK_RED + "").replace("&5", ChatColor.DARK_PURPLE + "").replace("&6", ChatColor.GOLD + "").replace("&7", ChatColor.GRAY + "").replace("&8", ChatColor.DARK_GRAY + "").replace("&9", ChatColor.BLUE + "").replace("&a", ChatColor.GREEN + "").replace("&b", ChatColor.AQUA + "").replace("&c", ChatColor.RED + "").replace("&d", ChatColor.LIGHT_PURPLE + "").replace("&e", ChatColor.YELLOW + "").replace("&f", ChatColor.WHITE + "").replace("&l", ChatColor.BOLD + "").replace("&m", ChatColor.STRIKETHROUGH + "").replace("&n", ChatColor.UNDERLINE + "").replace("&o", ChatColor.ITALIC + "").replace("&r", ChatColor.RESET + "").replace("&k", ChatColor.MAGIC + "");
 	}
+	*/
+	public static String ct(String text) {
+    // Hex first so &#aabbcc is not eaten by &a / &b / etc.
+    if (text != null && text.contains("&#")) {
+        java.util.regex.Pattern hexPattern = java.util.regex.Pattern.compile("&#([A-Fa-f0-9]{6})");
+        java.util.regex.Matcher matcher = hexPattern.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String hex = matcher.group(1);
+            StringBuilder replacement = new StringBuilder("§x");
+            for (char c : hex.toCharArray()) {
+                replacement.append('§').append(c);
+            }
+            matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement.toString()));
+        }
+        matcher.appendTail(sb);
+        text = sb.toString();
+    }
+
+    return text
+        .replace("&0", ChatColor.BLACK + "")
+        .replace("&1", ChatColor.DARK_BLUE + "")
+        .replace("&2", ChatColor.DARK_GREEN + "")
+        .replace("&3", ChatColor.DARK_AQUA + "")
+        .replace("&4", ChatColor.DARK_RED + "")
+        .replace("&5", ChatColor.DARK_PURPLE + "")
+        .replace("&6", ChatColor.GOLD + "")
+        .replace("&7", ChatColor.GRAY + "")
+        .replace("&8", ChatColor.DARK_GRAY + "")
+        .replace("&9", ChatColor.BLUE + "")
+        .replace("&a", ChatColor.GREEN + "")
+        .replace("&b", ChatColor.AQUA + "")
+        .replace("&c", ChatColor.RED + "")
+        .replace("&d", ChatColor.LIGHT_PURPLE + "")
+        .replace("&e", ChatColor.YELLOW + "")
+        .replace("&f", ChatColor.WHITE + "")
+        .replace("&l", ChatColor.BOLD + "")
+        .replace("&m", ChatColor.STRIKETHROUGH + "")
+        .replace("&n", ChatColor.UNDERLINE + "")
+        .replace("&o", ChatColor.ITALIC + "")
+        .replace("&r", ChatColor.RESET + "")
+        .replace("&k", ChatColor.MAGIC + "");
+}
 	//---- End of color
 	//---- Used to broadcast message - Added v0.7
 	public static void Broadcast(String msg) {
@@ -2489,7 +2575,6 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 	//---- End of broad cast
 	//---- Used to detect what colors are enabled for what chats. This was modified in v0.8.2 to accept custom chats
 	public Boolean checkColorCodes(String code, ConfigurationSection chat) {
-		getLogger().warning(code + " - End of list");
 		for (String precolors: Arrays.asList(chat.getString("color-codes").split(" "))) {
 			List<String> temp = Arrays.asList(precolors.split(":"));
 			String colors = temp.get(0);
@@ -2549,6 +2634,7 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 			if (colors.equalsIgnoreCase("underline") & colorsState) { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&920. &f&nUnderline").replace("%STATE%", "&aEnabled").replace("%NL%", "\n");} else if (colors.equalsIgnoreCase("underline") & !colorsState)  { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&920. &f&nUnderline").replace("%STATE%", "&cDisabled").replace("%NL%", "\n");}
 			if (colors.equalsIgnoreCase("italic") & colorsState) { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&921. &f&oItalic").replace("%STATE%", "&aEnabled").replace("%NL%", "\n");} else if (colors.equalsIgnoreCase("italic") & !colorsState)  { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&921. &f&oItalic").replace("%STATE%", "&cDisabled").replace("%NL%", "\n");}
 			if (colors.equalsIgnoreCase("reset") & colorsState) { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&922. &f&rReset").replace("%STATE%", "&aEnabled").replace("%NL%", "\n");} else if (colors.equalsIgnoreCase("reset") & !colorsState)  { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&922. &f&rReset").replace("%STATE%", "&cDisabled").replace("%NL%", "\n");}
+			if (colors.equalsIgnoreCase("rgb") & colorsState) { text = text + getConfig().getString("Messages.colors") .replace("%COLOR%", "&923. &#FF0000RGB &#RRGGBB").replace("%STATE%", "&aEnabled").replace("%NL%", "\n");} else if (colors.equalsIgnoreCase("rgb") & !colorsState) { text = text + getConfig().getString("Messages.colors").replace("%COLOR%", "&923. &#FF0000RGB &#RRGGBB").replace("%STATE%", "&cDisabled").replace("%NL%", "\n");}
 			i++;
         }
 		return ct(text);
@@ -2579,7 +2665,27 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		if (text.contains("&n") && checkColorCodes("underline", chat) == true) { text = text.replace("&n", ChatColor.UNDERLINE + ""); } else { text = text.replace("&n", "");}
 		if (text.contains("&o") && checkColorCodes("italic", chat) == true) { text = text.replace("&o", ChatColor.ITALIC + ""); } else { text = text.replace("&o", "");}
 		if (text.contains("&r") && checkColorCodes("reset", chat) == true) { text = text.replace("&r", ChatColor.RESET + ""); } else { text = text.replace("&r", "");}
-		//---- RGB Supported Coming Soon -- Started 7/7/2025
+		//---- RGB Support &#RRGGBB - Added in v0.8.9 - 7/15/2026 - uses color-codes key "rgb"
+		if (text.contains("&#")) {
+			java.util.regex.Pattern hexPattern = java.util.regex.Pattern.compile("&#([A-Fa-f0-9]{6})");
+			java.util.regex.Matcher matcher = hexPattern.matcher(text);
+			StringBuffer sb = new StringBuffer();
+			while (matcher.find()) {
+				if (checkColorCodes("rgb", chat)) {
+					String hex = matcher.group(1);
+					// Spigot/Paper 1.16+ hex format: §x§R§R§G§G§B§B
+					StringBuilder replacement = new StringBuilder("§x");
+					for (char c : hex.toCharArray()) {
+						replacement.append('§').append(c);
+					}
+					matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement.toString()));
+				} else {
+					matcher.appendReplacement(sb, ""); // strip &#RRGGBB when disabled
+				}
+			}
+			matcher.appendTail(sb);
+			text = sb.toString();
+		}
 		//if (text.contains("&#") && checkColorCodes("reset", chat) == true) { text = text.replace("&r", ChatColor.RESET + ""); } else { text = text.replace("&r", "");}
 		
 		return text;
@@ -2600,7 +2706,8 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
 		if(rank == "Special") { tag = ct(getConfig().getString("Tag.special.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "special")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
 		if(rank == "Elite") { tag = ct(getConfig().getString("Tag.elite.layout")).replace("%PLAYER%", p2.getName()).replace("%MESSAGE%", chatCleaner(msg, "elite")).replace("%WORLD%", p1.getWorld().getName()).replace("%GAMEMODE%", p1.getGameMode().toString()); }
 		*/
-		getLogger().warning(tag);
+		/* - Removed v0.8.9 - 7/15/2026 - removed tag logging to remove console spam
+		getLogger().warning(tag); */
 		p1.sendMessage(tag);
 		return "";
 	}
@@ -2610,6 +2717,13 @@ public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
     	if(player.hasPermission(permission) && !inIgnorelist(player.getUniqueId().toString(), player.getName(), chat)) {
     		if (checkTalkChatSpecified(player.getName(), chat.getString("name").toLowerCase())) {
 	    		if (chat.getBoolean("enabled")) {
+					String tag = ct(chat.getString(layout))
+						.replace("%PLAYER%", player.getName())
+						.replace("%DISPLAY_NAME%", player.getDisplayName())
+						.replace("%MESSAGE%", chatCleaner(msg, chat))
+						.replace("%WORLD%", player.getWorld().getName())
+						.replace("%GAMEMODE%", player.getGameMode().toString());
+					getLogger().warning(tag);
 	    			for(Player p : Bukkit.getOnlinePlayers()) {
 	    	    		if(p.hasPermission(permission) && !inIgnorelist(p.getUniqueId().toString(), p.getName(), chat) && checkViewChatSpecified(p.getName().toLowerCase(), chat.getString("name").toLowerCase()) && getPlayerIgnoreStatus(getServer().getOfflinePlayer(player.getName()), p).equalsIgnoreCase("&cunignored")) {
     	    				pSend(msg, p, player, layout, chat);	    	    			
