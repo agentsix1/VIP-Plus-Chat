@@ -247,7 +247,7 @@ import sun.security.util.FilePaths;
 
 public class StaffChat extends JavaPlugin implements Listener, TabCompleter  {
 	//---- This is used to easily grab the current version of the program - Added v0.8
-public String version = "v0.8.7";
+public String version = "v0.8.10";
 public HashMap<Player, String> focus = new HashMap<>();
 public final String blacklist_location = "\\"+"files"+"\\"+"blacklist.yml";
 public final String ignorelist_location = "\\"+"files"+"\\"+"ignorelist.yml";
